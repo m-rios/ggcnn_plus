@@ -6,7 +6,6 @@ import argparse
 import numpy as np
 import h5py
 
-from keras.models import load_model
 
 import matplotlib.pyplot as plt
 from skimage.filters import gaussian
@@ -50,25 +49,32 @@ def plot_output(name, rgb_img, depth_img, grasp_position_img, grasp_angle_img, g
 
         fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(2, 2, 1)
+        ax.set_title('RGB')
         ax.imshow(rgb_img)
         for g in gs:
-            g.plot(ax)
+            m = g.arg_max_iou(gt_bbs)
+            if m is not None:
+                gt_bbs[m].plot(ax, 'b')
+            g.plot(ax, 'r')
 
-        for g in gt_bbs:
-            g.plot(ax, color='g')
+        #for g in gt_bbs:
+        #    g.plot(ax, color='g')
 
         ax = fig.add_subplot(2, 2, 2)
+        ax.set_title('Depth')
         ax.imshow(depth_img)
         for g in gs:
-            g.plot(ax, color='r')
-
-        for g in gt_bbs:
-            g.plot(ax, color='g')
+            m = g.arg_max_iou(gt_bbs)
+            if m is not None:
+                gt_bbs[m].plot(ax, 'b')
+            g.plot(ax, 'r')
 
         ax = fig.add_subplot(2, 2, 3)
+        ax.set_title('Grasp quality')
         ax.imshow(grasp_position_img, cmap='Reds', vmin=0, vmax=1)
 
         ax = fig.add_subplot(2, 2, 4)
+        ax.set_title('Grasp angle')
         plot = ax.imshow(grasp_angle_img, cmap='hsv', vmin=-np.pi / 2, vmax=np.pi / 2)
         plt.colorbar(plot)
         plt.savefig(name)
@@ -181,14 +187,14 @@ def run(model_path, dataset_fn, export, epochs):
             print('%s\t%s\t%s/%s\t%0.02f%s' % (model_folder.split('/')[-1], epoch, s, s+f, s/(s+f)*100.0, '%'))
             write_log('%0.02f\t' % (s/(s+f)*100.0))
 
-            if VISUALISE_FAILURES:
+            if VISUALISE_FAILURES and EXPORT_VISUALIZATION:
                 print('Plotting Failures')
                 shuffle(failed)
                 for i in failed:
                     plot_output(EXPORT_FN.format(epoch_name, 'failure', i), rgb_imgs[i, ], depth_imgs[i, ], grasp_positions_out[i, ].squeeze(), grasp_angles_out[i, ].squeeze(), bbs_all[i, ],
                                 no_grasps=NO_GRASPS, grasp_width_img=grasp_width_out[i, ].squeeze())
 
-            if VISUALISE_SUCCESSES:
+            if VISUALISE_SUCCESSES and EXPORT_VISUALIZATION:
                 print('Plotting Successes')
                 shuffle(succeeded)
                 for i in succeeded:
@@ -206,5 +212,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     global EXPORT_VISUALIZATION
     EXPORT_VISUALIZATION = args.o
+
+    from keras.models import load_model
 
     run(args.model, args.dataset, args.o, args.e)

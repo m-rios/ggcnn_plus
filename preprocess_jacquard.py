@@ -9,6 +9,7 @@ from skimage.transform import resize
 import argparse
 import copy
 import datetime
+import cv2
 import glob
 import h5py
 import json
@@ -114,7 +115,17 @@ if __name__ == '__main__':
             rgb_img_base = Image(io.imread(os.path.join(obj_class_path, rgb_img_fn)))
             depth_img_base = DepthImage(io.imread(os.path.join(obj_class_path, depth_img_fn)))
             #hist_base = histogram(depth_img_base)
+
+
+            # Remove artifacts due to inpainting and scale to cornell units
             depth_img_base.inpaint(missing_value=-1)
+            #depth_img_base.img[depth_img_base.img < 0] = depth_img_base.img[depth_img_base.img > 0].min()
+
+            #valid = depth_img_base.img != -1
+            #mean = depth_img_base.img[valid].mean()
+            #depth_img_base.img[valid] -= mean
+
+
             #hist_inpainted = histogram(depth_img_base)
             bounding_boxes_base = grasp.BoundingBoxes.load_as_jacquard(os.path.join(obj_class_path,grasp_fn))
             center = bounding_boxes_base.center
@@ -156,7 +167,8 @@ if __name__ == '__main__':
                     depth.zoom(zoom_factor)
                     bbs.zoom(zoom_factor, (OUTPUT_IMG_SIZE[0]//2, OUTPUT_IMG_SIZE[1]//2))
 
-                depth.normalise()
+                depth.img -= depth.img.mean()
+                depth.img /= depth.img.std()
                 pos_img, ang_img, width_img = bbs.draw(depth.shape)
 
 
@@ -165,11 +177,14 @@ if __name__ == '__main__':
                     fig.suptitle(obj_id+'_'+obj_class)
                     rgb.show(ax[0])
                     bbs.show(ax[0])
+                    ax[0].set_xlim((0, OUTPUT_IMG_SIZE[1]))
+                    ax[0].set_ylim((0, OUTPUT_IMG_SIZE[0]))
                     ax[0].set_title('rgb')
-                    depth.show(ax[1])
+                    mp = depth.show(ax[1], vmin=-0.5, vmax=0.5)
                     ax[1].set_title('depth')
                     #plt.savefig(str(i)+'_'+obj_id+'_'+obj_class+'.png', format='png')
                     plt.show()
+                    print(depth.max())
                     while not plt.waitforbuttonpress():
                         pass
                 else:
@@ -188,6 +203,5 @@ if __name__ == '__main__':
         with h5py.File(output_dataset_fn,'w') as f:
             for tt_name in dataset:
                 for ds_name in dataset[tt_name]:
-                    import ipdb; ipdb.set_trace() # BREAKPOINT
                     f.create_dataset('{}/{}'.format(tt_name, ds_name),
                             data=np.array(dataset[tt_name][ds_name]))

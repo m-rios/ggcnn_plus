@@ -8,7 +8,7 @@ import numpy as np
 from skimage import io
 plt.ion()
 
-DATASET_PATH = 'data/datasets/raw/jacquard_samples'
+DATASET_PATH = '/Volumes/Data/Jacquard'
 
 if __name__ == '__main__':
     root, dir_names, file_names = next(os.walk(DATASET_PATH))
