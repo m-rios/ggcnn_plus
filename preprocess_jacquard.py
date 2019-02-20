@@ -19,9 +19,9 @@ import numpy as np
 import os
 import sys
 
-DATASET_PATH = 'data/datasets/raw/jacquard_samples'  # Path to the original dataset files
-OUTPUT_PATH = 'data/datasets/preprocessed'  # Destination of the pre-processed dataset
-TRAIN_SPLIT = 0.0
+DATASET_PATH = '/data/s3485781/Jacquard'  # Path to the original dataset files
+OUTPUT_PATH = '/data/s3485781/preprocessed'  # Destination of the pre-processed dataset
+TRAIN_SPLIT = 0.8
 TEST_IMAGES = None # List of obj_ids to use for testing
 RANDOM_ROTATIONS = 1
 RANDOM_ZOOM = False
