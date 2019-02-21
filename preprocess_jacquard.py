@@ -167,8 +167,10 @@ if __name__ == '__main__':
                     depth.zoom(zoom_factor)
                     bbs.zoom(zoom_factor, (OUTPUT_IMG_SIZE[0]//2, OUTPUT_IMG_SIZE[1]//2))
 
-                depth.img -= depth.img.mean()
-                depth.img /= depth.img.std()
+                #depth.img -= depth.img.mean()
+                #depth.img /= depth.img.std()
+                depth.img *= 1000
+                depth.normalise()
                 pos_img, ang_img, width_img = bbs.draw(depth.shape)
 
 
@@ -180,7 +182,7 @@ if __name__ == '__main__':
                     ax[0].set_xlim((0, OUTPUT_IMG_SIZE[1]))
                     ax[0].set_ylim((0, OUTPUT_IMG_SIZE[0]))
                     ax[0].set_title('rgb')
-                    mp = depth.show(ax[1], vmin=-0.5, vmax=0.5)
+                    mp = depth.show(ax[1])
                     ax[1].set_title('depth')
                     #plt.savefig(str(i)+'_'+obj_id+'_'+obj_class+'.png', format='png')
                     plt.show()
@@ -188,7 +190,7 @@ if __name__ == '__main__':
                     while not plt.waitforbuttonpress():
                         pass
                 else:
-                    ds['img_id'].append(obj_class)
+                    ds['img_id'].append('{}_{}'.format(obj_id, obj_class))
                     ds['rgb'].append(rgb.img)
                     ds['depth_inpainted'].append(depth.img)
                     ds['bounding_boxes'].append(bbs.to_array(pad_to=200))
