@@ -188,7 +188,7 @@ if __name__ == '__main__':
                     while not plt.waitforbuttonpress():
                         pass
                 else:
-                    ds['img_id'].append(int(obj_id))
+                    ds['img_id'].append(obj_class)
                     ds['rgb'].append(rgb.img)
                     ds['depth_inpainted'].append(depth.img)
                     ds['bounding_boxes'].append(bbs.to_array(pad_to=200))
