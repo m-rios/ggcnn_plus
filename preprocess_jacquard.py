@@ -6,6 +6,7 @@ from ggcnn.dataset_processing.image import Image, DepthImage
 from scipy import misc
 from skimage import io
 from skimage.transform import resize
+from random import shuffle
 import argparse
 import copy
 import datetime
@@ -22,15 +23,22 @@ import sys
 DATASET_PATH = '/data/s3485781/Jacquard'  # Path to the original dataset files
 OUTPUT_PATH = '/data/s3485781/preprocessed'  # Destination of the pre-processed dataset
 TRAIN_SPLIT = 0.8
-TEST_IMAGES = None # List of obj_ids to use for testing
+TEST_IMAGES = None # List of scene_obj to use for testing
 RANDOM_ROTATIONS = 1
 RANDOM_ZOOM = False
 OUTPUT_IMG_SIZE = (300, 300)
 aug_factor = RANDOM_ROTATIONS
 #TOTAL_DS_SIZE = 49771
 TOTAL_DS_SIZE = 48
-DS_SIZE = { 'train': (round(TOTAL_DS_SIZE * TRAIN_SPLIT)*aug_factor,),
-            'test': (round(TOTAL_DS_SIZE * (1-TRAIN_SPLIT))*aug_factor,)} # Number of instances in dataset
+if TEST_IMAGES is not None:
+    DS_SIZE = { 'train': ((TOTAL_DS_SIZE - len(TEST_IMAGES)) * aug_factor,),
+                'test': (len(TEST_IMAGES) * aug_factor,)} # Number of instances in dataset
+else:
+    DS_SIZE = { 'train': (int(round(TOTAL_DS_SIZE * TRAIN_SPLIT)*aug_factor),),
+                'test': (int(round(TOTAL_DS_SIZE * (1-TRAIN_SPLIT))*aug_factor),)} # Number of instances in dataset
+
+
+
 PAD_TO = 1154 # Number of grasps
 WRITE_PERIOD = 5 # N instances after which to flush to disk
 #OUTPUT_IMG_SIZE = (1024, 1024)
@@ -59,10 +67,16 @@ if __name__ == '__main__':
     OUTPUT_PATH = args.o
     USE_STEREO = not args.perfect
 
+    if TEST_IMAGES is None:
+        scenes = [ t.split('/')[-1][:-11] for t in glob.glob(os.path.join(
+            DATASET_PATH, '*/*grasps.txt'))]
+        shuffle(scenes)
+        TEST_IMAGES = set(scenes[:DS_SIZE['test'][0]])
+
     # Open dataset path
     try:
-        dataset_root, obj_classes, dataset_fns = next(os.walk(DATASET_PATH))
-        obj_classes.sort()
+        dataset_root, objs, dataset_fns = next(os.walk(DATASET_PATH))
+        objs.sort()
     except:
         print('Could not find path: {}'.format(DATASET_PATH))
         sys.exit(0)
@@ -115,7 +129,7 @@ if __name__ == '__main__':
     description = {}
     description['original_dataset'] = DATASET_PATH.split('/')[-1]
     if TEST_IMAGES:
-        description['test_images'] = TEST_IMAGES
+        description['test_images'] = list(TEST_IMAGES)
     else:
         description['train_split'] = TRAIN_SPLIT
     description['stereo'] = USE_STEREO
@@ -140,31 +154,30 @@ if __name__ == '__main__':
         with open(output_dataset_description_fn,'w') as json_description:
             json.dump(description, json_description, indent=2)
 
-    for obj_class in obj_classes:
-        obj_class_path = os.path.join(dataset_root, obj_class)
+    for obj in objs:
+        obj_path = os.path.join(dataset_root, obj)
 
         # Isolate object instances
-        obj_ids = set()
-        for obj_fn in os.listdir(obj_class_path):
-            obj_ids.add(obj_fn.split('_')[0])
+        scenes = set()
+        for obj_fn in os.listdir(obj_path):
+            scenes.add(obj_fn.split('_')[0])
 
         # Preprocess object
-        obj_ids = list(obj_ids)
-        obj_ids.sort()
-        for obj_id in obj_ids:
-            print('Processing {}_{}'.format(obj_id, obj_class))
+        scenes = list(scenes)
+        scenes.sort()
+        for scene in scenes:
+            print('Processing {}_{}'.format(scene, obj))
 
-            rgb_img_fn = '{}_{}_RGB.png'.format(obj_id, obj_class)
+            rgb_img_fn = '{}_{}_RGB.png'.format(scene, obj)
             if USE_STEREO:
-                depth_img_fn = '{}_{}_stereo_depth.tiff'.format(obj_id, obj_class)
+                depth_img_fn = '{}_{}_stereo_depth.tiff'.format(scene, obj)
             else:
-                depth_img_fn = '{}_{}_perfect_depth.tiff'.format(obj_id, obj_class)
-            grasp_fn = '{}_{}_grasps.txt'.format(obj_id, obj_class)
+                depth_img_fn = '{}_{}_perfect_depth.tiff'.format(scene, obj)
+            grasp_fn = '{}_{}_grasps.txt'.format(scene, obj)
 
-            rgb_img_base = Image(io.imread(os.path.join(obj_class_path, rgb_img_fn)))
-            depth_img_base = DepthImage(io.imread(os.path.join(obj_class_path, depth_img_fn)))
+            rgb_img_base = Image(io.imread(os.path.join(obj_path, rgb_img_fn)))
+            depth_img_base = DepthImage(io.imread(os.path.join(obj_path, depth_img_fn)))
             #hist_base = histogram(depth_img_base)
-
 
             # Remove artifacts due to inpainting and scale to cornell units
             depth_img_base.inpaint(missing_value=-1)
@@ -176,14 +189,14 @@ if __name__ == '__main__':
 
 
             #hist_inpainted = histogram(depth_img_base)
-            bounding_boxes_base = grasp.BoundingBoxes.load_as_jacquard(os.path.join(obj_class_path,grasp_fn))
+            bounding_boxes_base = grasp.BoundingBoxes.load_as_jacquard(os.path.join(obj_path,grasp_fn))
             center = bounding_boxes_base.center
             #plt.hist(hist_base)
 
             # Split train/test
             ds_output = 'train'
             if TEST_IMAGES:
-                if int(obj_id) in TEST_IMAGES:
+                if '_'.join([scene, obj]) in TEST_IMAGES:
                     ds_output = 'test'
             elif np.random.rand() > TRAIN_SPLIT:
                 ds_output = 'test'
@@ -225,7 +238,7 @@ if __name__ == '__main__':
 
                 if VISUALIZE_ONLY:
                     ax[0].clear() # remove old bb
-                    fig.suptitle(obj_id+'_'+obj_class)
+                    fig.suptitle(scene+'_'+obj)
                     rgb.show(ax[0])
                     bbs.show(ax[0])
                     ax[0].set_xlim((0, OUTPUT_IMG_SIZE[1]))
@@ -233,13 +246,12 @@ if __name__ == '__main__':
                     ax[0].set_title('rgb')
                     mp = depth.show(ax[1])
                     ax[1].set_title('depth')
-                    #plt.savefig(str(i)+'_'+obj_id+'_'+obj_class+'.png', format='png')
                     plt.show()
                     print(depth.max())
                     while not plt.waitforbuttonpress():
                         pass
                 else:
-                    ds['img_id'].append('{}_{}'.format(obj_id, obj_class))
+                    ds['img_id'].append('{}_{}'.format(scene, obj))
                     ds['rgb'].append(rgb.img)
                     ds['depth_inpainted'].append(depth.img)
                     ds['bounding_boxes'].append(bbs.to_array(pad_to=PAD_TO))
@@ -254,6 +266,7 @@ if __name__ == '__main__':
 
 
 if not VISUALIZE_ONLY:
+    print('Last write')
     for tt_name in dataset:
         tt_sz = np.array(dataset[tt_name]['img_id']).size
         if tt_sz == 0:
@@ -263,3 +276,4 @@ if not VISUALIZE_ONLY:
             output_ds[tt_name][ds_name][nw:nw+tt_sz,] = np.array(dataset[tt_name][ds_name])
             del dataset[tt_name][ds_name][:]
         next_write[tt_name] += tt_sz
+
