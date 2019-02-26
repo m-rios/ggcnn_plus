@@ -10,3 +10,11 @@
 # Original GG-CNN
 * **generate_dataset.py**: creates a hdf5 file in data/datasets with
   augmented/preprocessed data propely split into training/testing sets from raw dataset sources
+
+# Jacquard
+* 49771 instances of objects (different objects and scenes)
+* 1154 max graps per object
+
+# Peregrine
+* **Dataset generation**: Memory usage of 190GB. Takes 5h to start writting to
+  disk.

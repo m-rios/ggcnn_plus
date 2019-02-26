@@ -26,7 +26,25 @@ TEST_IMAGES = None # List of obj_ids to use for testing
 RANDOM_ROTATIONS = 1
 RANDOM_ZOOM = False
 OUTPUT_IMG_SIZE = (300, 300)
+aug_factor = RANDOM_ROTATIONS
+#TOTAL_DS_SIZE = 49771
+TOTAL_DS_SIZE = 48
+DS_SIZE = { 'train': (round(TOTAL_DS_SIZE * TRAIN_SPLIT)*aug_factor,),
+            'test': (round(TOTAL_DS_SIZE * (1-TRAIN_SPLIT))*aug_factor,)} # Number of instances in dataset
+PAD_TO = 1154 # Number of grasps
+WRITE_PERIOD = 5 # N instances after which to flush to disk
 #OUTPUT_IMG_SIZE = (1024, 1024)
+
+def save_dataset():
+    for tt_name in dataset:
+        tt_sz = np.array(dataset[tt_name]['img_id']).size
+        if tt_sz == 0:
+            continue
+        nw = next_write[tt_name]
+        for ds_name in dataset[tt_name]:
+            output_ds[tt_name][ds_name][nw:nw+tt_sz,] = np.array(dataset[tt_name][ds_name])
+            del dataset[tt_name][ds_name][:]
+        next_write[tt_name] += tt_sz
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -63,6 +81,26 @@ if __name__ == '__main__':
         'grasp_width'
     ]
 
+    sizes = {
+            'img_id':           (),
+            'rgb':              (OUTPUT_IMG_SIZE[0], OUTPUT_IMG_SIZE[1], 3),
+            'depth_inpainted':  (OUTPUT_IMG_SIZE[0], OUTPUT_IMG_SIZE[1]),
+            'bounding_boxes':   (PAD_TO, 4, 2),
+            'grasp_points_img': (OUTPUT_IMG_SIZE[0], OUTPUT_IMG_SIZE[1]),
+            'angle_img':        (OUTPUT_IMG_SIZE[0], OUTPUT_IMG_SIZE[1]),
+            'grasp_width':      (OUTPUT_IMG_SIZE[0], OUTPUT_IMG_SIZE[1])
+    }
+
+    types = {
+        'angle_img': 'float64',
+        'bounding_boxes': 'int64',
+        'depth_inpainted': 'float32',
+        'grasp_points_img': 'float64',
+        'grasp_width': 'float64',
+        'img_id': '|S32',
+        'rgb': 'uint8',
+    }
+
     # Empty datatset.
     dataset = {
         'test':  dict([(f, []) for f in fields]),
@@ -90,6 +128,17 @@ if __name__ == '__main__':
         plt.ion()
         fig, ax = plt.subplots(1,2)
         mpldatacursor.datacursor(hover=True, bbox=dict(alpha=1, fc='w'),formatter='i, j = {i}, {j}\nz ={z:.02g}'.format)
+    else:
+        WRITE_EPOCH = 0
+        output_ds = h5py.File(output_dataset_fn,'w')
+        for tt_name in dataset:
+            for ds_name in dataset[tt_name]:
+                sub_ds_sz = DS_SIZE[tt_name] + sizes[ds_name]
+                output_ds.create_dataset('{}/{}'.format(tt_name, ds_name),
+                        sub_ds_sz, dtype=types[ds_name])
+        next_write = {'test': 0, 'train': 0}
+        with open(output_dataset_description_fn,'w') as json_description:
+            json.dump(description, json_description, indent=2)
 
     for obj_class in obj_classes:
         obj_class_path = os.path.join(dataset_root, obj_class)
@@ -180,7 +229,7 @@ if __name__ == '__main__':
                     rgb.show(ax[0])
                     bbs.show(ax[0])
                     ax[0].set_xlim((0, OUTPUT_IMG_SIZE[1]))
-                    ax[0].set_ylim((0, OUTPUT_IMG_SIZE[0]))
+                    ax[0].set_ylim((OUTPUT_IMG_SIZE[0]), 0)
                     ax[0].set_title('rgb')
                     mp = depth.show(ax[1])
                     ax[1].set_title('depth')
@@ -193,17 +242,24 @@ if __name__ == '__main__':
                     ds['img_id'].append('{}_{}'.format(obj_id, obj_class))
                     ds['rgb'].append(rgb.img)
                     ds['depth_inpainted'].append(depth.img)
-                    ds['bounding_boxes'].append(bbs.to_array(pad_to=200))
+                    ds['bounding_boxes'].append(bbs.to_array(pad_to=PAD_TO))
                     ds['grasp_points_img'].append(pos_img)
                     ds['angle_img'].append(ang_img)
                     ds['grasp_width'].append(width_img)
+                    if WRITE_EPOCH == (WRITE_PERIOD-1):
+                        WRITE_EPOCH = 0
+                        save_dataset()
+                    else:
+                        WRITE_EPOCH += 1
 
 
-    if not VISUALIZE_ONLY:
-        with open(output_dataset_description_fn,'w') as json_description:
-            json.dump(description, json_description, indent=2)
-        with h5py.File(output_dataset_fn,'w') as f:
-            for tt_name in dataset:
-                for ds_name in dataset[tt_name]:
-                    f.create_dataset('{}/{}'.format(tt_name, ds_name),
-                            data=np.array(dataset[tt_name][ds_name]))
+if not VISUALIZE_ONLY:
+    for tt_name in dataset:
+        tt_sz = np.array(dataset[tt_name]['img_id']).size
+        if tt_sz == 0:
+            continue
+        nw = next_write[tt_name]
+        for ds_name in dataset[tt_name]:
+            output_ds[tt_name][ds_name][nw:nw+tt_sz,] = np.array(dataset[tt_name][ds_name])
+            del dataset[tt_name][ds_name][:]
+        next_write[tt_name] += tt_sz
