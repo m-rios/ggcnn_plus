@@ -13,7 +13,7 @@ from keras.layers import Input
 from keras.models import Model
 from keras.utils import Sequence
 
-INPUT_DATASET = 'data/datasets/preprocessed/190228_1247.hdf5'
+INPUT_DATASET = '/data/s3485781/preprocessed/190226_1809.hdf5'
 BATCH_SZ = 24
 N_EPOCHS = 100
 WORKERS = multiprocessing.cpu_count()
