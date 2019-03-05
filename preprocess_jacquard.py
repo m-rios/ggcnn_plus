@@ -28,14 +28,8 @@ RANDOM_ROTATIONS = 1
 RANDOM_ZOOM = False
 OUTPUT_IMG_SIZE = (300, 300)
 aug_factor = RANDOM_ROTATIONS
+JAW_SIZES = [2,3]
 #TOTAL_DS_SIZE = 49771
-TOTAL_DS_SIZE = 48
-if TEST_IMAGES is not None:
-    DS_SIZE = { 'train': ((TOTAL_DS_SIZE - len(TEST_IMAGES)) * aug_factor,),
-                'test': (len(TEST_IMAGES) * aug_factor,)} # Number of instances in dataset
-else:
-    DS_SIZE = { 'train': (int(round(TOTAL_DS_SIZE * TRAIN_SPLIT)*aug_factor),),
-                'test': (int(round(TOTAL_DS_SIZE * (1-TRAIN_SPLIT))*aug_factor),)} # Number of instances in dataset
 
 
 
@@ -54,6 +48,7 @@ def save_dataset():
             del dataset[tt_name][ds_name][:]
         next_write[tt_name] += tt_sz
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', action='store_true', help='visualize only')
@@ -67,12 +62,6 @@ if __name__ == '__main__':
     OUTPUT_PATH = args.o
     USE_STEREO = not args.perfect
 
-    if TEST_IMAGES is None:
-        scenes = [ t.split('/')[-1][:-11] for t in glob.glob(os.path.join(
-            DATASET_PATH, '*/*grasps.txt'))]
-        shuffle(scenes)
-        TEST_IMAGES = set(scenes[:DS_SIZE['test'][0]])
-
     # Open dataset path
     try:
         dataset_root, objs, dataset_fns = next(os.walk(DATASET_PATH))
@@ -80,6 +69,21 @@ if __name__ == '__main__':
     except:
         print('Could not find path: {}'.format(DATASET_PATH))
         sys.exit(0)
+
+    TOTAL_DS_SIZE = len(glob.glob(os.path.join(DATASET_PATH, '*/*grasps.txt')))
+
+    if TEST_IMAGES is not None:
+        DS_SIZE = { 'train': ((TOTAL_DS_SIZE - len(TEST_IMAGES)) * aug_factor,),
+                    'test': (len(TEST_IMAGES) * aug_factor,)} # Number of instances in dataset
+    else:
+        DS_SIZE = { 'train': (int(round(TOTAL_DS_SIZE * TRAIN_SPLIT)*aug_factor),),
+                    'test': (int(round(TOTAL_DS_SIZE * (1-TRAIN_SPLIT))*aug_factor),)} # Number of instances in dataset
+
+    if TEST_IMAGES is None:
+        scenes = [ t.split('/')[-1][:-11] for t in glob.glob(os.path.join(
+            DATASET_PATH, '*/*grasps.txt'))]
+        shuffle(scenes)
+        TEST_IMAGES = set(scenes[:DS_SIZE['test'][0]])
 
     # Create output path if it doesnt exist
     if not os.path.exists(OUTPUT_PATH):
@@ -189,7 +193,9 @@ if __name__ == '__main__':
 
 
             #hist_inpainted = histogram(depth_img_base)
-            bounding_boxes_base = grasp.BoundingBoxes.load_as_jacquard(os.path.join(obj_path,grasp_fn))
+            bounding_boxes_base = grasp.BoundingBoxes.load_as_jacquard(
+                    os.path.join(obj_path,grasp_fn),
+                    JAW_SIZES)
             center = bounding_boxes_base.center
             #plt.hist(hist_base)
 
@@ -231,8 +237,6 @@ if __name__ == '__main__':
 
                 #depth.img -= depth.img.mean()
                 #depth.img /= depth.img.std()
-                depth.img *= 1000
-                depth.normalise()
                 pos_img, ang_img, width_img = bbs.draw(depth.shape)
 
 
