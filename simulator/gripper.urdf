@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<robot name="myfirst">
+    <material name="red">
+        <color rgba="0.8 0 0 1"/>
+    </material>
+    <material name="green">
+        <color rgba="0 0.8 0 1"/>
+    </material>
+    <material name="yellow">
+        <color rgba="0.8 0.8 0 1"/>
+    </material>
+    <link name="base_link">
+        <visual>
+            <geometry>
+                <sphere radius="0.01"/>
+            </geometry>
+        </visual>
+    </link>
+
+    <link name="palm">
+        <visual>
+            <geometry>
+                <box size="0.12 0.01 0.02"/>
+            </geometry>
+            <material name="yellow"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.12 0.01 0.02"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="actuator" type="fixed">
+        <parent link="base_link"/>
+        <child link="palm"/>
+        <origin rpy="0 0 0" xyz="0 0 -0.1"/>
+    </joint>
+
+    <link name="left_jaw">
+        <visual>
+            <geometry>
+                <box size="0.05 0.01 0.02"/>
+            </geometry>
+            <origin rpy="0 0 1.57" xyz="-0.055 0.03 0"/>
+            <material name="red"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.05 0.01 0.02"/>
+            </geometry>
+            <origin rpy="0 0 1.57" xyz="-0.055 0.03 0"/>
+        </collision>
+    </link>
+    <joint name="left_joint" type="prismatic">
+        <parent link="palm"/>
+        <child link="left_jaw"/>
+        <limit effort="1000.0" lower="0" upper="0.05" velocity="0.5"/>
+    </joint>
+
+    <link name="right_jaw">
+        <visual>
+            <geometry>
+                <box size="0.05 0.01 0.02"/>
+            </geometry>
+            <origin rpy="0 0 1.57" xyz="0.055 0.03 0"/>
+            <material name="green"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.05 0.01 0.02"/>
+            </geometry>
+            <origin rpy="0 0 1.57" xyz="0.055 0.03 0"/>
+        </collision>
+    </link>
+    <joint name="right_joint" type="prismatic">
+        <parent link="palm"/>
+        <child link="right_jaw"/>
+        <limit effort="1000.0" lower="-0.05" upper="0" velocity="-0.5"/>
+    </joint>
+</robot>
