@@ -7,3 +7,6 @@ keras
 matplotlib
 opencv-python
 h5py
+pandas
+pybullet
+mpldatacursor

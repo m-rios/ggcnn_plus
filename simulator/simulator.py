@@ -11,6 +11,61 @@ green = [0,1,0]
 blue = [0,0,1]
 black = [0,0,0]
 
+class Camera:
+
+    def __init__(self, width=300, height=300, pos=[0, 0, 2], target=np.zeros(3,)):
+        self._width = width
+        self._height = height
+        self._target = target
+        self._up = [0., 1., 0.]
+        self._pos = pos
+        self._view = None
+        self._projection = None
+        self._update_camera_parameters()
+
+    def snap(self):
+        return p.getCameraImage(self._width, self._height, self._view, self._projection)
+
+    def _update_camera_parameters(self):
+        self._view = p.computeViewMatrix(self._pos, self.target, self._up)
+        self._projection = p.computeProjectionMatrixFOV(50, self.width/float(self.height), 1, 11)
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @pos.setter
+    def pos(self, pos):
+        self._pos = pos
+        self._update_camera_parameters()
+
+    @property
+    def height(self):
+        return self._height
+
+    @height.setter
+    def height(self, height):
+        self._height = pos
+        self._update_camera_properties()
+
+    @property
+    def width(self):
+        return self._width
+
+    @height.setter
+    def height(self, height):
+        self._height = height
+        self._update_camera_properties()
+
+    @property
+    def target(self):
+        return self._target
+
+    @target.setter
+    def target(self, target):
+        self._target = target
+        self._update_camera_properties()
+
 class Simulator:
 
     def __init__(self, gui=False, debug=False, epochs=10000, stop_th=1e-6, g=-10):
@@ -29,14 +84,17 @@ class Simulator:
         p.setGravity(0,0,g)
 
         self.planeId = p.loadURDF("plane.urdf")
+        self.gid = None
         self.old_poses = {}
         self.obj_ids = {}
+        self.cam = Camera()
 
     @property
     def bodies(self):
         for i in range(p.getNumBodies()):
-            if p.getBodyUniqueId(i) != self.planeId:
-                yield p.getBodyUniqueId(i)
+            bid = p.getBodyUniqueId(i)
+            if bid != self.planeId and bid != self.gid:
+                yield bid
 
     def load(self, fn, pos=None, ori=None):
         extension = fn.split('.')[-1].lower()
@@ -49,6 +107,8 @@ class Simulator:
 
         self.old_poses[bid] = self._get_pose(bid)
         self.obj_ids[bid] = fn.split('/')[-1].split('.')[-2]
+
+        return bid
 
     def _load_obj(self, fn, pos, ori):
         visual_fn = fn
@@ -116,6 +176,9 @@ class Simulator:
 
         return bId
 
+    def add_gripper(self, gripper_fn):
+        self.gid = p.loadURDF(gripper_fn)
+
     def _remove_body(self, bId):
         del self.old_poses[bId]
         p.removeBody(bId)
@@ -158,6 +221,8 @@ class Simulator:
         """
         assert os.path.exists(fn)
 
+        self.reset()
+
         with open(fn) as csv:
             csv.readline() # Skip descriptor line
             for line in csv:
@@ -168,8 +233,6 @@ class Simulator:
                 self.load(obj_fn, obj_pos, obj_ori)
 
         p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
-
-
 
     def _update_pos(self):
         for id in self.bodies:
@@ -186,6 +249,15 @@ class Simulator:
         p.addUserDebugLine(f[0,:], t[0,:], red, parentObjectUniqueId=parent)
         p.addUserDebugLine(f[1,:], t[1,:], green, parentObjectUniqueId=parent)
         p.addUserDebugLine(f[2,:], t[2,:], blue, parentObjectUniqueId=parent)
+
+    def close_gripper(self):
+        p.setJointMotorControlArray(bodyUniqueId=self.gid, jointIndices=[6, 7],
+                controlMode=p.POSITION_CONTROL, targetPositions=[0.05, -0.05], forces=[0.8]*2)
+
+    def move_gripper_to(self, pose):
+        pose[2] -= 2
+        p.setJointMotorControlArray(self.gid, range(6), controlMode=p.POSITION_CONTROL,
+                targetPositions=pose)
 
     def drawAABB(self, bb, parent=-1, color=black):
         bb = np.array(bb)
@@ -219,16 +291,20 @@ class Simulator:
         p.addUserDebugLine(o+y, o+y+z, color, parentObjectUniqueId=parent)
         p.addUserDebugLine(o+y+x, o+y+x+z, color, parentObjectUniqueId=parent)
 
-    def run(self, autostop=True):
+    def debug_viz(self):
         if self.debug:
             for bid in self.bodies:
                 self.drawFrame([0,0,0], bid)
 
-        for i in range(self.epochs):
+    def run(self, epochs=None, autostop=True):
+        if epochs is None:
+            epochs = self.epochs
+        self.debug_viz()
+
+        for i in range(epochs):
             p.stepSimulation()
             time.sleep(1./240.)
             if autostop and self.is_stable():
                 break
 
             self._update_pos()
-
