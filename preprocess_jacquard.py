@@ -20,8 +20,8 @@ import numpy as np
 import os
 import sys
 
-DATASET_PATH = '/data/s3485781/Jacquard'  # Path to the original dataset files
-OUTPUT_PATH = '/data/s3485781/preprocessed'  # Destination of the pre-processed dataset
+DATASET_PATH = os.environ['JACQUARD_PATH']  # Path to the original dataset files
+OUTPUT_PATH = os.environ['PREPROCESSED_PATH']  # Destination of the pre-processed dataset
 TRAIN_SPLIT = 0.8
 TEST_IMAGES = None # List of scene_obj to use for testing
 RANDOM_ROTATIONS = 1
@@ -29,13 +29,9 @@ RANDOM_ZOOM = False
 OUTPUT_IMG_SIZE = (300, 300)
 aug_factor = RANDOM_ROTATIONS
 JAW_SIZES = [2,3]
-#TOTAL_DS_SIZE = 49771
-
-
 
 PAD_TO = 1154 # Number of grasps
-WRITE_PERIOD = 5 # N instances after which to flush to disk
-#OUTPUT_IMG_SIZE = (1024, 1024)
+WRITE_PERIOD = 1000 # N instances after which to flush to disk
 
 def save_dataset():
     for tt_name in dataset:
