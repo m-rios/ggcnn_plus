@@ -11,30 +11,24 @@ import numpy as np
 
 class Jacquard:
 
-    def __init__(self, path):
+    def __init__(self, path, fraction=1, split=0.8):
         self.path = path
-        self.size = sum(1 for _ in glob.iglob(os.path.join(path, '*/*_grasps.txt')))
-        self.fields = [
-            'img_id',
-            'rgb',
-            'stereo_depth',
-            'perfect_depth',
-            'bounding_boxes',
-        ]
-        sizes = {
-            'img_id': (self.size,),
-            'rgb': (self.size, 1024, 1024, 3),
-            'stereo_depth': (self.size, 1024, 1024),
-            'perfect_depth': (self.size, 1024, 1024),
-            'bounding_boxes': (self.size, 4, 2)
-        }
-        types = {
-            'img_id': '|S32',
-            'rgb': 'uint8',
-            'stereo_depth': 'float32',
-            'perfect_depth': 'float32',
-            'bounding_boxes': 'int64'
-        }
+        self.split = split
+        self.keys = ['_'.join(x.split('/')[-1].split('_')[0:2]) for x in glob.iglob(os.path.join(path, '*/*_grasps.txt'))]
+        self.keys = np.random.choice(np.array(self.keys), len(self.keys)*fraction)
+        self._train_idx, self._test_idx = np.split(np.random.permutation(np.arange(self.size)), [int(self.size*split)])
+
+    @property
+    def size(self):
+        return self.keys.size
+
+    @property
+    def train_keys(self):
+        return self.keys[self._train_idx]
+
+    @property
+    def test_keys(self):
+        return self.keys[self._test_idx]
 
     def __getitem__(self, key):
         scene, cls = key.split('_')
@@ -50,8 +44,7 @@ class Jacquard:
         return item
 
     def __iter__(self):
-        for grasp_fn in glob.iglob(os.path.join(self.path, '*/*_grasps.txt')):
-            key = grasp_fn.split('/')[-1].split('_grasps.txt')[0]
+        for key in self.keys:
             yield self[key]
 
     def _load_grasps(self, key):
@@ -96,4 +89,8 @@ if __name__ == '__main__':
     for j in d:
         print j['img_id']
         print len(j['bounding_boxes'])
+    print 'train'
+    print d.train_keys
+    print 'test'
+    print d.test_keys
 
