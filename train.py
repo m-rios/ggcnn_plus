@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime
+import argparse
 
 import h5py
 import numpy as np
@@ -13,7 +14,11 @@ from keras.layers import Input
 from keras.models import Model
 from keras.utils import Sequence
 
-INPUT_DATASET = '/data/s3485781/preprocessed/190226_1809.hdf5'
+parser = argparse.ArgumentParser()
+parser.add_argument('dataset', help='Path to dataset')
+args = parser.parse_args()
+
+INPUT_DATASET = args.dataset
 BATCH_SZ = 24
 N_EPOCHS = 100
 WORKERS = multiprocessing.cpu_count()
