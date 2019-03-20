@@ -23,7 +23,7 @@ parser.add_argument('--visualize', action='store_true', help='Visualize only')
 parser.add_argument('--fraction', default=1, type=float, help='Percent of data to consider')
 parser.add_argument('--split', default=0.8, type=float, help='Train/test split')
 parser.add_argument('--size', default=300, type=int, help='Size of input layer (always squared)')
-parser.add_argument('--mean', action=store_true, help='Center depth around mean')
+parser.add_argument('--mean', action='store_true', help='Center depth around mean')
 args = parser.parse_args()
 
 
