@@ -15,7 +15,7 @@ class Jacquard:
         self.path = path
         self.split = split
         self.keys = ['_'.join(x.split('/')[-1].split('_')[0:2]) for x in glob.iglob(os.path.join(path, '*/*_grasps.txt'))]
-        self.keys = np.random.choice(np.array(self.keys), len(self.keys)*fraction)
+        self.keys = np.random.choice(np.array(self.keys), int(len(self.keys)*fraction))
         self._train_idx, self._test_idx = np.split(np.random.permutation(np.arange(self.size)), [int(self.size*split)])
 
     @property

@@ -84,6 +84,7 @@ if not args.visualize:
 for subset in subsets:
     idx = 0
     for key in getattr(jaq, subset+'_keys'):
+        print('Processing {}'.format(key))
         scene = jaq[key]
 
         depth_img_base = DepthImage(scene[depth_type])
