@@ -41,6 +41,7 @@ if not args.visualize:
     for arg in vars(args):
         description[arg] = getattr(args, arg)
     description['creation_date'] = dt
+    description['dataset_size'] = jaq.size * aug_factor
     with open(output_dataset_description_fn,'w') as json_description:
         json.dump(description, json_description, indent=2)
 
