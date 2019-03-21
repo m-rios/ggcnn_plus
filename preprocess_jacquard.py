@@ -24,6 +24,7 @@ parser.add_argument('--fraction', default=1, type=float, help='Percent of data t
 parser.add_argument('--split', default=0.8, type=float, help='Train/test split')
 parser.add_argument('--size', default=300, type=int, help='Size of input layer (always squared)')
 parser.add_argument('--mean', action='store_true', help='Center depth around mean')
+parser.add_argument('--compress', action='store_true', help='Compress output dataset using lzf')
 args = parser.parse_args()
 
 
@@ -79,8 +80,13 @@ if not args.visualize:
     for subset in subsets:
         for field in fields:
             subset_sz = (getattr(jaq, subset+'_keys').size * aug_factor,) + sizes[field]
-            output_ds.create_dataset(subset + '/' + field, subset_sz,
-                    dtype=types[field])
+            if args.compress:
+                output_ds.create_dataset(subset + '/' + field, subset_sz,
+                        dtype=types[field], compression='lzf')
+            else:
+                output_ds.create_dataset(subset + '/' + field, subset_sz,
+                        dtype=types[field])
+
 
 
 for subset in subsets:
