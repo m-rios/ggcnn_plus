@@ -32,11 +32,11 @@ if __name__ == '__main__':
             obj_name = obj_fn.split('/')[-1].split('.')[-2]
             world_fn = obj_name + '_scene.csv'
             sim.save(os.path.join(args.export, world_fn))
-            w, h, rgb, depth, _ = sim.cam.snap()
-            input = np.zeros((h, w, 4))
+            rgb, depth = sim.cam.snap()
+            input = np.zeros((args.height, args.width, 4))
             input[:,:,0:3] = rgb[:,:,0:3]
             input[:,:,3] = depth
-            np.save('{}/{}_{}_{}.npy'.format(args.export, obj_name, w, h), input)
+            np.save('{}/{}_{}_{}.npy'.format(args.export, obj_name, args.width, args.height), input)
         sim.reset()
 
 

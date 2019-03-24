@@ -17,6 +17,8 @@ class Camera:
         self._width = width
         self._height = height
         self._target = target
+        self._near = 1
+        self._far = 2
         self._up = [0., 1., 0.]
         self._pos = pos
         self._view = None
@@ -24,11 +26,14 @@ class Camera:
         self._update_camera_parameters()
 
     def snap(self):
-        return p.getCameraImage(self._width, self._height, self._view, self._projection)
+        _, _, rgb, depth, _ = p.getCameraImage(self._width, self._height, self._view, self._projection)
+        depth = self._far * self._near / (self._far - (self._far - self._near) * depth)
+        rgb = rgb.astype(np.uint8)
+        return rgb, depth
 
     def _update_camera_parameters(self):
         self._view = p.computeViewMatrix(self._pos, self.target, self._up)
-        self._projection = p.computeProjectionMatrixFOV(50, self.width/float(self.height), 1, 11)
+        self._projection = p.computeProjectionMatrixFOV(50, self.width/float(self.height), self._near, self._far)
 
     @property
     def pos(self):
@@ -66,13 +71,53 @@ class Camera:
         self._target = target
         self._update_camera_properties()
 
+    @property
+    def left(self):
+        m = np.array(self._projection).reshape(4,4).T
+        return - (m[0,3] + 1)/m[0,0]
+
+    @property
+    def right(self):
+        m = np.array(self._projection).reshape(4,4).T
+        return 2./m[0,0] + self.left
+
+    @property
+    def bottom(self):
+        m = np.array(self._projection).reshape(4,4).T
+        return -(m[1,3] + 1)/m[1,1]
+
+    @property
+    def top(self):
+        m = np.array(self._projection).reshape(4,4).T
+        return 2./m[1,1] + self.bottom
+
+    def world_from_camera(self, u, v, d):
+        # Window to NDC transformation
+        n_u = float(u)/(self.width - 1)
+        n_v = (self.height - 1 - float(v))/(self.height - 1)
+        # NDC to view transformation
+        l,r,t,b = self.left, self.right, self.top, self.bottom
+        w = r - l
+        h = t - b
+        c_u = l + w * n_u
+        c_v = b + h * n_v
+        # View to world
+        p_c = np.array([c_u, c_v, -d, 1])
+        view = np.array(self._view).reshape(4,4).T
+        t_c_w = np.linalg.inv(view)
+        world = np.dot(t_c_w, p_c)
+        import ipdb; ipdb.set_trace() # BREAKPOINT
+        return world[0:3]
+
+
 class Simulator:
 
-    def __init__(self, gui=False, debug=False, epochs=10000, stop_th=1e-6, g=-10):
+    def __init__(self, gui=False, timestep=1e-4, debug=False, epochs=10000, stop_th=1e-6, g=-10):
         self.gui = gui
         self.debug = debug
         self.epochs = epochs
         self.stop_th = stop_th
+        self.timestep = timestep
 
         if gui:
             mode = p.GUI
@@ -80,7 +125,9 @@ class Simulator:
             mode = p.DIRECT
 
         self.client = p.connect(mode)
+        p.setTimeStep(self.timestep)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        p.setPhysicsEngineParameter(erp=0.4, contactERP=0.4, frictionERP=0.4)
         p.setGravity(0,0,g)
 
         self.planeId = p.loadURDF("plane.urdf")
@@ -101,7 +148,9 @@ class Simulator:
         assert extension == 'urdf' or extension == 'obj'
 
         if extension == 'urdf':
-            bid = p.loadURDF(fn)
+            if pos is None:
+                pos = [0,0,0]
+            bid = p.loadURDF(fn, basePosition=pos)
         else:
             bid = self._load_obj(fn, pos, ori)
 
@@ -113,6 +162,7 @@ class Simulator:
     def _load_obj(self, fn, pos, ori):
         visual_fn = fn
         collision_fn = fn.split('.')[-2] + '_vhacd.obj'
+        visual_fn = collision_fn # for debuggin purposes
         obj_id = fn.split('/')[-1].split('.')[-2]
 
         if not os.path.exists(collision_fn):
@@ -173,11 +223,16 @@ class Simulator:
         vId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn, rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=scale, visualFramePosition=shift)
         cId = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=collision_fn, meshScale=scale, collisionFramePosition=shift)
         bId =  p.createMultiBody(baseMass=1,baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cId, baseVisualShapeIndex = vId, basePosition=start_pos, baseOrientation=start_ori)
+        #p.changeDynamics(bId, -1, lateralFriction=1, contactStiffness=1, contactDamping=1)
+        p.changeDynamics(bId, -1, lateralFriction=1)
+        #info = p.getDynamicsInfo(bId, -1)
 
         return bId
 
     def add_gripper(self, gripper_fn):
-        self.gid = p.loadURDF(gripper_fn)
+        self.gid = p.loadURDF(gripper_fn, basePosition=[0, 0, 0.06])
+        #info = [p.getDynamicsInfo(self.gid, l) for l in range(p.getNumJoints(self.gid))]
+        #p.changeDynamics(self.gid, -1, contactStiffness=1000, contactDamping=10000)
 
     def _remove_body(self, bId):
         del self.old_poses[bId]
@@ -242,7 +297,7 @@ class Simulator:
         pos, ori = p.getBasePositionAndOrientation(bId)
         return np.array(pos), np.array(ori)
 
-    def drawFrame(self, frame, parent):
+    def drawFrame(self, frame, parent=-1):
         f = np.tile(np.array(frame), (3,1))
         t = f + np.eye(3)
 
@@ -251,13 +306,22 @@ class Simulator:
         p.addUserDebugLine(f[2,:], t[2,:], blue, parentObjectUniqueId=parent)
 
     def close_gripper(self):
-        p.setJointMotorControlArray(bodyUniqueId=self.gid, jointIndices=[6, 7],
-                controlMode=p.POSITION_CONTROL, targetPositions=[0.05, -0.05], forces=[0.8]*2)
+        for joint in [6,7]:
+            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                    targetPosition=0.1, maxVelocity=0.1)
+        self.run_action(tolerance=1e-2)
+
+    def open_gripper(self):
+        for joint in [6,7]:
+            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                    targetPosition=0, maxVelocity=1)
+        self.run_action()
 
     def move_gripper_to(self, pose):
-        pose[2] -= 2
-        p.setJointMotorControlArray(self.gid, range(6), controlMode=p.POSITION_CONTROL,
-                targetPositions=pose)
+        for joint in range(6):
+            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                    targetPosition=pose[joint], maxVelocity=1)
+        self.run_action()
 
     def drawAABB(self, bb, parent=-1, color=black):
         bb = np.array(bb)
@@ -303,8 +367,48 @@ class Simulator:
 
         for i in range(epochs):
             p.stepSimulation()
-            time.sleep(1./240.)
+            time.sleep(self.timestep)
             if autostop and self.is_stable():
                 break
 
             self._update_pos()
+
+    def debug_run(self):
+        p.removeAllUserDebugItems()
+        p.addUserDebugParameter("x",-2,2,0)
+        p.addUserDebugParameter("y",-2,2,0)
+        p.addUserDebugParameter("z",-5,0,0)
+        p.addUserDebugParameter("roll",-1.5,1.5,0)
+        p.addUserDebugParameter("pitch",-1.5,1.5,0)
+        p.addUserDebugParameter("yaw",-1.5,1.5,0)
+        p.addUserDebugParameter("width",0,0.1,0)
+        old_values = [0]*7
+        while True:
+            p.stepSimulation()
+            time.sleep(self.timestep)
+            values = [p.readUserDebugParameter(id) for id in range(7)]
+            values[6] /= 2.
+            values.append(-values[6])
+            p.setJointMotorControlArray(bodyUniqueId=self.gid, jointIndices=range(8),
+                    controlMode=p.POSITION_CONTROL, targetPositions=values)
+
+
+    def run_action(self, tolerance=1e-2):
+        """
+            Runs previously commanded action until manipulator joints stop
+        """
+        # Step first to get some motion
+        p.stepSimulation()
+        time.sleep(self.timestep)
+
+        n_joints = p.getNumJoints(self.gid)
+        states = p.getJointStates(self.gid, range(n_joints))
+        velocities = [j[1] for j in states]
+
+        while (np.abs(np.array(velocities)) > tolerance).any():
+            p.stepSimulation()
+            time.sleep(self.timestep)
+
+            states = p.getJointStates(self.gid, range(n_joints))
+            velocities = [j[1] for j in states]
+

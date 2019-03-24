@@ -16,8 +16,8 @@
     <joint name="x_joint" type="prismatic">
         <parent link="world"/>
         <child link="x"/>
-        <origin xyz="0 0 2" rpy="0 0 0"/>
-        <limit effort="1000.0" lower="-10" upper="10" velocity="0.5"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <limit effort="1000.0" lower="-10" upper="10" velocity="0.01"/>
         <axis xyz="1 0 0"/>
     </joint>
     <link name="y"/>
@@ -25,7 +25,7 @@
         <parent link="x"/>
         <child link="y"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <limit effort="1000.0" lower="-10" upper="10" velocity="0.5"/>
+        <limit effort="1000.0" lower="-10" upper="10" velocity="0.01"/>
         <axis xyz="0 1 0"/>
     </joint>
     <link name="z"/>
@@ -33,7 +33,7 @@
         <parent link="y"/>
         <child link="z"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <limit effort="1000.0" lower="-10" upper="10" velocity="0.5"/>
+        <limit effort="1000.0" lower="-10" upper="10" velocity="0.01"/>
         <axis xyz="0 0 1"/>
     </joint>
     <link name="r"/>
@@ -41,7 +41,7 @@
         <parent link="z"/>
         <child link="r"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <limit effort="1000.0" lower="0" upper="6.283" velocity="0.5"/>
+        <limit effort="1000.0" lower="0" upper="6.283" velocity="0.01"/>
         <axis xyz="1 0 0"/>
     </joint>
     <link name="p"/>
@@ -49,7 +49,7 @@
         <parent link="r"/>
         <child link="p"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <limit effort="1000.0" lower="0" upper="6.283" velocity="0.5"/>
+        <limit effort="1000.0" lower="0" upper="6.283" velocity="0.01"/>
         <axis xyz="0 1 0"/>
     </joint>
 
@@ -97,7 +97,7 @@
     <joint name="left_joint" type="prismatic">
         <parent link="base_link"/>
         <child link="left_jaw"/>
-        <limit effort="1000.0" lower="0" upper="0.05" velocity="0.001"/>
+        <limit effort="1000.0" lower="0" upper="0.05"/>
     </joint>
 
     <link name="right_jaw">
@@ -121,6 +121,7 @@
     <joint name="right_joint" type="prismatic">
         <parent link="base_link"/>
         <child link="right_jaw"/>
-        <limit effort="1000.0" lower="-0.05" upper="0" velocity="-0.001"/>
+        <limit effort="1000.0" lower="0" upper="0.05"/>
+        <axis xyz="-1 0 0"/>
     </joint>
 </robot>
