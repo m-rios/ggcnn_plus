@@ -3,6 +3,7 @@ import pybullet_data
 import numpy as np
 import os
 import time
+import math
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
 
@@ -11,9 +12,10 @@ green = [0,1,0]
 blue = [0,0,1]
 black = [0,0,0]
 
+
 class Camera:
 
-    def __init__(self, width=300, height=300, pos=[0, 0, 2], target=np.zeros(3,)):
+    def __init__(self, width=300, height=300, pos=[0, 0, 2], target=np.zeros(3,), debug=False):
         self._width = width
         self._height = height
         self._target = target
@@ -21,19 +23,44 @@ class Camera:
         self._far = 2
         self._up = [0., 1., 0.]
         self._pos = pos
+        self.debug = debug
         self._view = None
         self._projection = None
+        self._reproject = None
         self._update_camera_parameters()
+
+    def _compute_depth(self, depth):
+        normal = np.array(self._target) - np.array(self._pos)
+        for u in range(300):
+            for v in range(300):
+                pixel = np.array([2.*u/300. - 1, 2.*v/300. - 1, -1., 1])
+                point = np.dot(self._reproject, pixel)[0:3]
+                point /= np.linalg.norm(point)
+                depth[v,u] /= np.dot(normal, point)
+        return cos
 
     def snap(self):
         _, _, rgb, depth, _ = p.getCameraImage(self._width, self._height, self._view, self._projection)
         depth = self._far * self._near / (self._far - (self._far - self._near) * depth)
         rgb = rgb.astype(np.uint8)
+        pos = np.array(self._pos)
+        normal = np.array(self._target) - pos
+        normal /= np.linalg.norm(normal)
+        for u in range(self.width):
+            for v in range(self.height):
+                pixel = np.array([2.*u/self.width - 1, 2.*v/self.height - 1, -1., 1])
+                point = np.dot(self._reproject, pixel)[0:3] - pos
+                point /= np.linalg.norm(point)
+                depth[v,u] /= np.dot(normal, point)
+
         return rgb, depth
 
     def _update_camera_parameters(self):
         self._view = p.computeViewMatrix(self._pos, self.target, self._up)
         self._projection = p.computeProjectionMatrixFOV(50, self.width/float(self.height), self._near, self._far)
+        v = np.array(self._view).reshape(4,4).T
+        pr = np.array(self._projection).reshape(4,4).T
+        self._reproject = np.dot(np.linalg.inv(v), np.linalg.inv(pr))
 
     @property
     def pos(self):
@@ -71,53 +98,48 @@ class Camera:
         self._target = target
         self._update_camera_properties()
 
-    @property
-    def left(self):
-        m = np.array(self._projection).reshape(4,4).T
-        return - (m[0,3] + 1)/m[0,0]
-
-    @property
-    def right(self):
-        m = np.array(self._projection).reshape(4,4).T
-        return 2./m[0,0] + self.left
-
-    @property
-    def bottom(self):
-        m = np.array(self._projection).reshape(4,4).T
-        return -(m[1,3] + 1)/m[1,1]
-
-    @property
-    def top(self):
-        m = np.array(self._projection).reshape(4,4).T
-        return 2./m[1,1] + self.bottom
-
     def world_from_camera(self, u, v, d):
+        v = self.height - v
         # Window to NDC transformation
-        n_u = float(u)/(self.width - 1)
-        n_v = (self.height - 1 - float(v))/(self.height - 1)
-        # NDC to view transformation
-        l,r,t,b = self.left, self.right, self.top, self.bottom
-        w = r - l
-        h = t - b
-        c_u = l + w * n_u
-        c_v = b + h * n_v
-        # View to world
-        p_c = np.array([c_u, c_v, -d, 1])
-        view = np.array(self._view).reshape(4,4).T
-        t_c_w = np.linalg.inv(view)
-        world = np.dot(t_c_w, p_c)
-        import ipdb; ipdb.set_trace() # BREAKPOINT
+        n_u = 2.*u/self.width - 1
+        n_v = 2.*v/self.height - 1
+        ndc = np.array([n_u, n_v, -self._near, 1.])
+        # NDC to view
+        to = np.dot(self._reproject, ndc)[0:3]
+        fr = np.array(self._pos)
+        ray = to-fr
+        ray /= np.linalg.norm(ray)
+        tgt = np.array(self.target) - np.array(self.pos)
+        #d = d * np.linalg.norm(tgt) / np.dot(ray, tgt)
+        world = fr + ray*d
+
+        if self.debug:
+            p.addUserDebugLine(fr, fr + 3*(cn[:3,1]-fr)/np.linalg.norm(cn[:3,1]-fr))
+            p.addUserDebugLine(fr, world[0:3])
+
+
         return world[0:3]
+
+    def show_frustrum(self):
+        if self.debug:
+            #column order ul, ur, dl, dr
+            frame = np.array([[-1, 1, -1, 1], [1,1,-1,1], [-1,-1,-1,1], [1,-1,-1,1]]).T
+            cn = np.dot(self._reproject, frame)
+            p.addUserDebugLine(cn[:3,0],cn[:3,1])
+            p.addUserDebugLine(cn[:3,0],cn[:3,2])
+            p.addUserDebugLine(cn[:3,2],cn[:3,3])
+            p.addUserDebugLine(cn[:3,3],cn[:3,1])
 
 
 class Simulator:
 
-    def __init__(self, gui=False, timestep=1e-4, debug=False, epochs=10000, stop_th=1e-6, g=-10):
+    def __init__(self, gui=False, timeout=60, timestep=1e-4, debug=False, epochs=10000, stop_th=1e-6, g=-10):
         self.gui = gui
         self.debug = debug
         self.epochs = epochs
         self.stop_th = stop_th
         self.timestep = timestep
+        self.timeout = timeout
 
         if gui:
             mode = p.GUI
@@ -231,6 +253,8 @@ class Simulator:
 
     def add_gripper(self, gripper_fn):
         self.gid = p.loadURDF(gripper_fn, basePosition=[0, 0, 0.06])
+        p.enableJointForceTorqueSensor(self.gid, 6, 1)
+        p.enableJointForceTorqueSensor(self.gid, 7, 1)
         #info = [p.getDynamicsInfo(self.gid, l) for l in range(p.getNumJoints(self.gid))]
         #p.changeDynamics(self.gid, -1, contactStiffness=1000, contactDamping=10000)
 
@@ -270,7 +294,7 @@ class Simulator:
 
     def restore(self, fn, path):
         """
-            Will read the .world and .bullet files associated to {fn} and load
+            Will read the .csv and .bullet files associated to {fn} and load
             the world accordingly. Will look for linked .obj files in the
             {path} directory
         """
@@ -309,7 +333,7 @@ class Simulator:
         for joint in [6,7]:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                     targetPosition=0.1, maxVelocity=0.1)
-        self.run_action(tolerance=1e-2)
+        self.run_action()
 
     def open_gripper(self):
         for joint in [6,7]:
@@ -320,8 +344,9 @@ class Simulator:
     def move_gripper_to(self, pose):
         for joint in range(6):
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                    targetPosition=pose[joint], maxVelocity=1)
-        self.run_action()
+                    targetPosition=pose[joint], maxVelocity=2)
+        #self.wait_move(pose)
+        self.run_action(tolerance=1e-3)
 
     def drawAABB(self, bb, parent=-1, color=black):
         bb = np.array(bb)
@@ -355,6 +380,10 @@ class Simulator:
         p.addUserDebugLine(o+y, o+y+z, color, parentObjectUniqueId=parent)
         p.addUserDebugLine(o+y+x, o+y+x+z, color, parentObjectUniqueId=parent)
 
+    def sleep(self):
+        if self.gui:
+            time.sleep(self.timestep)
+
     def debug_viz(self):
         if self.debug:
             for bid in self.bodies:
@@ -367,7 +396,7 @@ class Simulator:
 
         for i in range(epochs):
             p.stepSimulation()
-            time.sleep(self.timestep)
+            self.sleep()
             if autostop and self.is_stable():
                 break
 
@@ -385,30 +414,36 @@ class Simulator:
         old_values = [0]*7
         while True:
             p.stepSimulation()
-            time.sleep(self.timestep)
+            self.sleep()
             values = [p.readUserDebugParameter(id) for id in range(7)]
             values[6] /= 2.
             values.append(-values[6])
             p.setJointMotorControlArray(bodyUniqueId=self.gid, jointIndices=range(8),
                     controlMode=p.POSITION_CONTROL, targetPositions=values)
 
-
     def run_action(self, tolerance=1e-2):
-        """
-            Runs previously commanded action until manipulator joints stop
-        """
-        # Step first to get some motion
         p.stepSimulation()
-        time.sleep(self.timestep)
+        self.sleep()
+        velocities = lambda: [joint[1] for joint in p.getJointStates(self.gid, range(8))]
 
-        n_joints = p.getNumJoints(self.gid)
-        states = p.getJointStates(self.gid, range(n_joints))
-        velocities = [j[1] for j in states]
-
-        while (np.abs(np.array(velocities)) > tolerance).any():
+        for _ in range(int(self.timeout/self.timestep)):
+            if (np.abs(np.array(velocities())) < tolerance).all():
+                break
             p.stepSimulation()
-            time.sleep(self.timestep)
+            self.sleep()
+        else:
+            print('Action timed out')
 
-            states = p.getJointStates(self.gid, range(n_joints))
-            velocities = [j[1] for j in states]
+    def wait_move(self, goal, pos_tol=1e-3, ang_tol=1e-2):
+        p.stepSimulation()
+        self.sleep()
+        pos = lambda: np.array(p.getLinkState(self.gid, 5)[0])
+        ori = lambda: np.array(p.getEulerFromQuaternion(p.getLinkState(self.gid, 5)[1]))
+        goal = np.array(goal)
+
+        for _ in range(int(self.timeout/self.timestep)):
+            import ipdb; ipdb.set_trace() # BREAKPOINT
+            if (np.abs(pos() - goal[0:3]) < pos_tol).all() and np.min(np.vstack((np.abs(goal[3:6] - ori()), np.abs(ori() - goal[3:6]))), axis=0):
+                pass
+        pass
 
