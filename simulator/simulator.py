@@ -211,6 +211,21 @@ class Simulator:
 
         return bid
 
+    def load_shapenet(self, obj_id, pos=None, ori=None):
+        shapenet_path = os.environ['SHAPENET_PATH']
+        obj_fn = os.path.join(shapenet_path, obj_id, + '.obj')
+
+    def obj_center(self, obj_fn):
+        vertices = []
+        with open(obj_fn, 'r') as f:
+            for line in f.readlines():
+                fields = line.split(' ')
+                if fields[0] == 'v':
+                    vertices.append([float(x) for x in fields[1:4]])
+
+        vertices = np.array(vertices)
+        #return vertices.mean(axis=0)
+
     def _load_obj(self, fn, pos, ori):
         visual_fn = fn
         collision_fn = fn.split('.')[-2] + '_vhacd.obj'
@@ -260,10 +275,11 @@ class Simulator:
         max_dim = np.argmax(size)
         new_scale = np.clip(size[max_dim], 0.08, 0.9)/size[max_dim]
         size *= new_scale
-        shift = -aabb[0] - size/2.
-        shift[2] = -size[2]/2.
-
         scale *= np.repeat(new_scale, 3)
+
+        center = self.obj_center(visual_fn)
+        center *= scale
+
 
         if pos is None:
             start_pos = np.zeros((3,))
@@ -277,8 +293,12 @@ class Simulator:
         else:
             start_ori = p.getQuaternionFromEuler(ori)
 
-        vId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn, rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=scale, visualFramePosition=shift)
-        cId = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=collision_fn, meshScale=scale, collisionFramePosition=shift)
+        vId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
+                rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=scale,
+                visualFramePosition=-center)
+        cId = p.createCollisionShape(shapeType=p.GEOM_MESH,
+                fileName=collision_fn, meshScale=scale,
+                collisionFramePosition=-center)
         bId =  p.createMultiBody(baseMass=size[max_dim],baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cId, baseVisualShapeIndex = vId, basePosition=start_pos, baseOrientation=start_ori)
         if self.debug:
             self.drawFrame([0,0,0], bId)
