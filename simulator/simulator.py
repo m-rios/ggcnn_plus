@@ -1,4 +1,5 @@
 import pybullet as p
+import struct
 import pybullet_data
 import numpy as np
 import os
@@ -39,7 +40,7 @@ class Camera:
                 depth[v,u] /= np.dot(normal, point)
         return cos
 
-    def snap(self):
+    def snap2(self):
         _, _, rgb, depth, _ = p.getCameraImage(self._width, self._height, self._view, self._projection)
         depth = self._far * self._near / (self._far - (self._far - self._near) * depth)
         rgb = rgb.astype(np.uint8)
@@ -53,6 +54,12 @@ class Camera:
                 point /= np.linalg.norm(point)
                 depth[v,u] /= np.dot(normal, point)
 
+        return rgb, depth
+
+    def snap(self):
+        _, _, rgb, depth, _ = p.getCameraImage(self._width, self._height, self._view, self._projection)
+        depth = self._far * self._near / (self._far - (self._far - self._near) * depth)
+        rgb = rgb.astype(np.uint8)
         return rgb, depth
 
     def _update_camera_parameters(self):
@@ -98,7 +105,7 @@ class Camera:
         self._target = target
         self._update_camera_properties()
 
-    def world_from_camera(self, u, v, d):
+    def world_from_camera2(self, u, v, d):
         v = self.height - v
         # Window to NDC transformation
         n_u = 2.*u/self.width - 1
@@ -120,6 +127,28 @@ class Camera:
 
         return world[0:3]
 
+    def world_from_camera(self, u, v, d):
+        v = self.height - v
+        # Window to NDC transformation
+        n_u = 2.*u/self.width - 1
+        n_v = 2.*v/self.height - 1
+        ndc = np.array([n_u, n_v, -self._near, 1.])
+        # NDC to world
+        to = np.dot(self._reproject, ndc)[0:3]
+        fr = np.array(self._pos)
+        ray = to-fr
+        ray /= np.linalg.norm(ray)
+        tgt = np.array(self.target) - np.array(self.pos)
+        d = d * np.linalg.norm(tgt) / np.dot(ray, tgt)
+        world = fr + ray*d
+
+        if self.debug:
+            p.addUserDebugLine(fr, fr + 3*(cn[:3,1]-fr)/np.linalg.norm(cn[:3,1]-fr))
+            p.addUserDebugLine(fr, world[0:3])
+
+
+        return world[0:3]
+
     def show_frustrum(self):
         if self.debug:
             #column order ul, ur, dl, dr
@@ -130,16 +159,34 @@ class Camera:
             p.addUserDebugLine(cn[:3,2],cn[:3,3])
             p.addUserDebugLine(cn[:3,3],cn[:3,1])
 
+    def compute_grasp(self, bb, depth):
+        """
+        Computes the center world coordinate and width size of a grasp defined
+        by its bounding box. bb is a (4,2) np array with the corners of the
+        grasp
+        """
+        center_pixels = np.mean(bb, axis=0).astype(np.int)
+        center_world = self.world_from_camera(center_pixels[1], center_pixels[0], depth)
+        corners_world = np.zeros((3,4))
+        # Width line
+        p1 = self.world_from_camera(bb[1,1], bb[1,0], depth)
+        p0 = self.world_from_camera(bb[0,1], bb[0,0], depth)
+        width = np.linalg.norm(p1-p0)
+
+        return center_world, width
+
 
 class Simulator:
 
-    def __init__(self, gui=False, timeout=60, timestep=1e-4, debug=False, epochs=10000, stop_th=1e-6, g=-10):
+    def __init__(self, gui=False, timeout=60, timestep=1e-4, debug=False,
+            epochs=10000, stop_th=1e-6, g=-10, bin_pos=[1.5, 1.5, 0.01]):
         self.gui = gui
         self.debug = debug
         self.epochs = epochs
         self.stop_th = stop_th
         self.timestep = timestep
         self.timeout = timeout
+        self.bin_pos = bin_pos
 
         if gui:
             mode = p.GUI
@@ -149,11 +196,12 @@ class Simulator:
         self.client = p.connect(mode)
         p.setTimeStep(self.timestep)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setPhysicsEngineParameter(erp=0.4, contactERP=0.4, frictionERP=0.4)
+        #p.setPhysicsEngineParameter(erp=0.4, contactERP=0.4, frictionERP=0.4)
         p.setGravity(0,0,g)
 
         self.planeId = p.loadURDF("plane.urdf")
         self.gid = None
+        self.bin = None
         self.old_poses = {}
         self.obj_ids = {}
         self.cam = Camera()
@@ -162,7 +210,7 @@ class Simulator:
     def bodies(self):
         for i in range(p.getNumBodies()):
             bid = p.getBodyUniqueId(i)
-            if bid != self.planeId and bid != self.gid:
+            if bid != self.planeId and bid != self.gid and bid != self.bin:
                 yield bid
 
     def load(self, fn, pos=None, ori=None):
@@ -181,10 +229,21 @@ class Simulator:
 
         return bid
 
+    def obj_center(self, obj_fn):
+        vertices = []
+        with open(obj_fn, 'r') as f:
+            for line in f.readlines():
+                fields = line.split(' ')
+                if fields[0] == 'v':
+                    vertices.append([float(x) for x in fields[1:4]])
+
+        vertices = np.array(vertices)
+        return vertices.mean(axis=0)
+
     def _load_obj(self, fn, pos, ori):
         visual_fn = fn
         collision_fn = fn.split('.')[-2] + '_vhacd.obj'
-        visual_fn = collision_fn # for debuggin purposes
+        visual_fn = collision_fn # Temporary fix until precise vhacd decomposition achieved
         obj_id = fn.split('/')[-1].split('.')[-2]
 
         if not os.path.exists(collision_fn):
@@ -193,12 +252,12 @@ class Simulator:
                     performance of your simulation''').format(visual_fn)
             collision_fn = visual_fn
 
-        root = fn.split('/')[-2]
+        root = '/'.join(fn.split('/')[:-1])
 
         metadata_fn = os.path.join(root, 'metadata.csv')
 
         scale = 1
-        mass = 1
+        #mass = 1
 
         if os.path.isfile(metadata_fn):
             csv = pd.read_csv(metadata_fn).set_index(u'fullId')
@@ -212,23 +271,29 @@ class Simulator:
                 # Check if NaN (due to missing value)
                 if scale != scale:
                     scale = 1
-                mass = csv.loc[wss_id][u'weight']
-                if mass != mass:
-                    mass = 1
+                #mass = csv.loc[wss_id][u'weight']
+                #if mass != mass:
+                #    mass = 1
 
-        scale = np.repeat(scale, 3)
+        scale = np.repeat(scale, 3).astype(np.float)
 
         # First load obj to get aabb
         vId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn, rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=scale)
         cId = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=collision_fn, meshScale=scale)
-        bId = p.createMultiBody(baseMass=mass,baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cId, baseVisualShapeIndex = vId)
+        bId = p.createMultiBody(baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cId, baseVisualShapeIndex = vId)
         aabb = np.array(p.getAABB(bId))
         p.removeBody(bId)
 
         # Compute size and reload with proper shift
         size = np.abs(aabb[1] - aabb[0])
-        shift = -aabb[0] - size/2.
-        shift[2] = -size[2]/2.
+        max_dim = np.argmax(size)
+        new_scale = np.clip(size[max_dim], 0.08, 0.9)/size[max_dim]
+        size *= new_scale
+        scale *= np.repeat(new_scale, 3)
+
+        center = self.obj_center(visual_fn)
+        center *= scale
+
 
         if pos is None:
             start_pos = np.zeros((3,))
@@ -242,21 +307,114 @@ class Simulator:
         else:
             start_ori = p.getQuaternionFromEuler(ori)
 
-        vId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn, rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=scale, visualFramePosition=shift)
-        cId = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=collision_fn, meshScale=scale, collisionFramePosition=shift)
-        bId =  p.createMultiBody(baseMass=1,baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cId, baseVisualShapeIndex = vId, basePosition=start_pos, baseOrientation=start_ori)
-        #p.changeDynamics(bId, -1, lateralFriction=1, contactStiffness=1, contactDamping=1)
-        p.changeDynamics(bId, -1, lateralFriction=1)
-        #info = p.getDynamicsInfo(bId, -1)
+        vId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
+                rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=scale,
+                visualFramePosition=-center)
+        cId = p.createCollisionShape(shapeType=p.GEOM_MESH,
+                fileName=collision_fn, meshScale=scale,
+                collisionFramePosition=-center)
+        bId =  p.createMultiBody(baseMass=size[max_dim],baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cId, baseVisualShapeIndex = vId, basePosition=start_pos, baseOrientation=start_ori)
+        if self.debug:
+            self.drawFrame([0,0,0], bId)
 
         return bId
 
+    def replay(self, log_fn, scene_fn):
+        self.restore(scene_fn, os.environ['SHAPENET_PATH'])
+        self.add_gripper('/Users/mario/Developer/msc-thesis/simulator/gripper.urdf')
+        log = self._read_logfile(log_fn)
+
+        for record in log:
+            Id = record[2]
+            pos = [record[3],record[4],record[5]]
+            orn = [record[6],record[7],record[8],record[9]]
+            p.resetBasePositionAndOrientation(Id,pos,orn)
+            numJoints = p.getNumJoints(Id)
+            for i in range (numJoints):
+                jointInfo = p.getJointInfo(Id,i)
+                qIndex = jointInfo[3]
+                if qIndex > -1:
+                    p.resetJointState(Id,i,record[qIndex-7+17])
+            #time.sleep(self.timestep)
+
+    def _read_logfile(self, filename, verbose = True):
+        f = open(filename, 'rb')
+
+        print('Opened'),
+        print(filename)
+
+        keys = f.readline().decode('utf8').rstrip('\n').split(',')
+        fmt = f.readline().decode('utf8').rstrip('\n')
+
+        # The byte number of one record
+        sz = struct.calcsize(fmt)
+        # The type number of one record
+        ncols = len(fmt)
+
+        if verbose:
+            print('Keys:'),
+            print(keys)
+            print('Format:'),
+            print(fmt)
+            print('Size:'),
+            print(sz)
+            print('Columns:'),
+            print(ncols)
+
+        # Read data
+        wholeFile = f.read()
+        # split by alignment word
+        chunks = wholeFile.split(b'\xaa\xbb')
+        log = list()
+        for chunk in chunks:
+            if len(chunk) == sz:
+                values = struct.unpack(fmt, chunk)
+                record = list()
+                for i in range(ncols):
+                    record.append(values[i])
+                log.append(record)
+
+        return log
+
     def add_gripper(self, gripper_fn):
-        self.gid = p.loadURDF(gripper_fn, basePosition=[0, 0, 0.06])
-        p.enableJointForceTorqueSensor(self.gid, 6, 1)
-        p.enableJointForceTorqueSensor(self.gid, 7, 1)
-        #info = [p.getDynamicsInfo(self.gid, l) for l in range(p.getNumJoints(self.gid))]
-        #p.changeDynamics(self.gid, -1, contactStiffness=1000, contactDamping=10000)
+        self.gid = p.loadURDF(gripper_fn)
+        self.drawFrame([0,0,0])
+        p.resetJointState(self.gid, 2, 1)
+
+    def evaluate_grasp(self, pose, width, log_fn=None):
+        if log_fn:
+            log = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, log_fn)
+        if not self.gid:
+            self.add_gripper('simulator/gripper.urdf')
+        #if not self.bin:
+        #    self.bin = p.loadURDF('simulator/bin.urdf', basePosition=self.bin_pos)
+        self.open_gripper()
+        # Move to pregrasp
+        self.move_gripper_to(pose + np.array([0, 0, 0.1, 0, 0, 0]))
+        self.set_gripper_width(width)
+        # Move to grasp
+        self.move_gripper_to(pose)
+        self.close_gripper()
+        # Move to postgrasp
+        #self.move_gripper_to(pose + np.array([0, 0, 1.5, 0, 0, 0]))
+        self.move_gripper_to(np.array([0, 0, 1.5, 0, 0, 0]))
+        bid = self.bodies.next()
+        final_pos,_ = p.getBasePositionAndOrientation(bid)
+        print('Final pos: ', final_pos)
+        if log_fn:
+            p.stopStateLogging(log)
+        return np.abs(final_pos[2] - 1.5) < 0.5
+
+        # Drop object in bin
+        self.move_gripper_to(np.array([self.bin_pos[0], self.bin_pos[1], 1.2, 0, 0, pose[5]]))
+        self.open_gripper()
+        self.run(epochs=int(4./self.timestep), autostop=False)
+        bid = self.bodies.next()
+        final_pos,_ = p.getBasePositionAndOrientation(bid)
+        print('Final pos: ', final_pos)
+        if log_fn:
+            p.stopStateLogging(log)
+        return np.linalg.norm(np.array(final_pos[0:2]) - np.array(self.bin_pos[0:2])) < 0.7
 
     def _remove_body(self, bId):
         del self.old_poses[bId]
@@ -310,8 +468,9 @@ class Simulator:
                 obj_pos = [float(fields[1]),float(fields[2]),float(fields[3])]
                 obj_ori = [float(fields[4]),float(fields[5]),float(fields[6])]
                 self.load(obj_fn, obj_pos, obj_ori)
+                print('Loaded '+ obj_fn)
 
-        p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
+        #p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
 
     def _update_pos(self):
         for id in self.bodies:
@@ -330,23 +489,40 @@ class Simulator:
         p.addUserDebugLine(f[2,:], t[2,:], blue, parentObjectUniqueId=parent)
 
     def close_gripper(self):
-        for joint in [6,7]:
-            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                    targetPosition=0.1, maxVelocity=0.1)
-        self.run_action()
+        self.set_gripper_width(0)
 
     def open_gripper(self):
+        self.set_gripper_width(0.1)
+
+    def set_gripper_width(self, width):
+        width = 0.1 - width
         for joint in [6,7]:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                    targetPosition=0, maxVelocity=1)
-        self.run_action()
+                    targetPosition=width/2., maxVelocity=1)
+        self.run(epochs=int(0.1/self.timestep))
 
-    def move_gripper_to(self, pose):
-        for joint in range(6):
+    def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2):
+        ang_tol = ang_tol*np.pi/180.
+        pose[2] += 0.02
+        for joint in range(3):
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                     targetPosition=pose[joint], maxVelocity=2)
-        #self.wait_move(pose)
-        self.run_action(tolerance=1e-3)
+        for joint in [3, 4, 5]:
+            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                    targetPosition=pose[joint], maxVelocity=15)
+
+        for _ in range(int(self.timeout/self.timestep)):
+            state = p.getLinkState(self.gid, 5)
+            pos = np.array(state[0])
+            ori = np.array(p.getEulerFromQuaternion(state[1]))
+            ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
+            if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
+                print('Arrived within tolerance')
+                break
+            p.stepSimulation()
+            self.sleep()
+        else:
+            print('Move timed out')
 
     def drawAABB(self, bb, parent=-1, color=black):
         bb = np.array(bb)
@@ -389,7 +565,7 @@ class Simulator:
             for bid in self.bodies:
                 self.drawFrame([0,0,0], bid)
 
-    def run(self, epochs=None, autostop=True):
+    def run(self, epochs=None, autostop=False):
         if epochs is None:
             epochs = self.epochs
         self.debug_viz()
