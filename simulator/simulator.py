@@ -142,9 +142,9 @@ class Camera:
         d = d * np.linalg.norm(tgt) / np.dot(ray, tgt)
         world = fr + ray*d
 
-        if self.debug:
-            p.addUserDebugLine(fr, fr + 3*(cn[:3,1]-fr)/np.linalg.norm(cn[:3,1]-fr))
-            p.addUserDebugLine(fr, world[0:3])
+        #if self.debug:
+        #    p.addUserDebugLine(fr, fr + 3*(cn[:3,1]-fr)/np.linalg.norm(cn[:3,1]-fr))
+        #    p.addUserDebugLine(fr, world[0:3])
 
 
         return world[0:3]
@@ -172,6 +172,9 @@ class Camera:
         p1 = self.world_from_camera(bb[1,1], bb[1,0], depth)
         p0 = self.world_from_camera(bb[0,1], bb[0,0], depth)
         width = np.linalg.norm(p1-p0)
+
+        if self.debug:
+            p.addUserDebugLine(self.pos, center_world)
 
         return center_world, width
 
@@ -204,7 +207,7 @@ class Simulator:
         self.bin = None
         self.old_poses = {}
         self.obj_ids = {}
-        self.cam = Camera()
+        self.cam = Camera(debug=debug)
 
     @property
     def bodies(self):

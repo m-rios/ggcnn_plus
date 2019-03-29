@@ -90,7 +90,7 @@ if __name__ == '__main__':
     from keras.models import load_model
     _, height, width, _ = load_model(model_fns[0]).input_shape
 
-    sim = Simulator(gui=False)
+    sim = Simulator(gui=False, timeout=4, debug=True)
     sim.cam.height = height
     sim.cam.width = width
 
@@ -135,7 +135,8 @@ if __name__ == '__main__':
         grasp_angles_out = np.arctan2(model_output_data[2], model_output_data[1])/2.0
         grasp_width_out = model_output_data[3] * 150.0
 
-        results = []
+        results = 0
+        failures = open(os.path.join(sim_log_path, 'failures.txt'), 'w')
 
         # Test results for each scene
         for scene_fn in scene_fns:
@@ -143,20 +144,25 @@ if __name__ == '__main__':
             scene_idx = input_idx[scene_name]
             sim.restore(scene_fn, SHAPENET_PATH)
             # Compute grasp 6DOF coordiantes w.r.t camera frame
-            gs = detect_grasps(grasp_positions_out[scene_idx,].squeeze(),
+            grasp_positions_smooth = gaussian(grasp_positions_out[scene_idx,].squeeze(), 5.0, preserve_range=True)
+            gs = detect_grasps(grasp_positions_smooth,
                     grasp_angles_out[scene_idx,].squeeze(),
                     width_img=grasp_width_out[scene_idx,].squeeze(),
                     no_grasps=args.grasps)[0]
             # Send grasp to simulator and evaluate
             fn = os.path.join(output_path, scene_name + '.png')
-            plot_output(input_idx, fn, input_imgs[scene_idx,:,:,0:3], input_depth[scene_idx].squeeze(),
-                    grasp_positions_out[scene_idx].squeeze(), grasp_angles_out[scene_idx].squeeze(),
-                    args.grasps, grasp_width_out[scene_idx].squeeze())
+            #plot_output(input_idx, fn, input_imgs[scene_idx,:,:,0:3], input_depth[scene_idx].squeeze(),
+            #        grasp_positions_out[scene_idx].squeeze(), grasp_angles_out[scene_idx].squeeze(),
+            #        args.grasps, grasp_width_out[scene_idx].squeeze())
             pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, depth[scene_idx][gs.center])
             pose = np.concatenate((pose, [0, 0, gs.angle]))
-            results += [sim.evaluate_grasp(pose, grasp_width, sim_log_path + '/'+scene_name+'.log')]
+            result = sim.evaluate_grasp(pose, grasp_width, sim_log_path + '/'+scene_name+'.log')
+            if not result:
+                failures.write(scene_name + '\n')
+            results += result
 
-        success = np.sum(results)/float(len(scene_fns))
+        success = float(results)/float(len(scene_fns))
         results_f.write('Epoch {}: {}%\n'.format(epoch, success))
+        failures.close()
 
 
