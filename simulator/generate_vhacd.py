@@ -3,7 +3,7 @@ import argparse
 import glob
 import os
 
-VHACD_PATH = '/Users/mario/Developer/v-hacd/src/cmake/test/testVHACD'
+VHACD_PATH = '/home/s3485781/v-hacd/build/linux2/test/testVHACD'
 LOG_FILE = '/tmp/vhacd.log'
 
 class VHACD:
@@ -11,11 +11,12 @@ class VHACD:
 
         self.vhacd_path = VHACD_PATH
         # Maximum number of voxels generated during the voxelization stage
-        self.resolution = 10
+        self.resolution = 100000
         # Maximum number of clipping stages. During each split stage, all the model parts (with a concavity higher than the user defined threshold) are clipped according the "best" clipping plane
         self.depth = 20
         # Maximum concavity
         self.concavity = 0.0025
+        self.concavity = 0.0
         # Granularity of the search for the "best" clipping plane
         self.planeDownsampling = 4
         # Precision of the convex-hull generation process during the clipping plane selection stage
@@ -26,6 +27,7 @@ class VHACD:
         self.beta = 0.05
         # Maximum allowed concavity during the merge stage
         self.gamma = 0.05
+        self.gamma = 0.0
         # Enable/disable normalizing the mesh before applying the convex decomposition
         self.pca = False
         # Approximate convex decomposition mode
@@ -70,8 +72,9 @@ if __name__ == '__main__':
 
     if not os.path.exists(args.output):
         os.mkdir(args.output)
-
+    print glob.glob(os.path.join(args.input, '*.obj'))
     for obj_fn in glob.glob(os.path.join(args.input, '*.obj')):
+        print 'Processing ' + obj_fn
         obj_name = obj_fn.split('/')[-1].split('.')[0]
         out_fn = os.path.join(args.output, obj_name + '_vhacd.obj')
         vhacd.run(obj_fn, out_fn)
