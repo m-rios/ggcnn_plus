@@ -14,7 +14,7 @@ if __name__ == '__main__':
     print('Opening gripper')
     sim.open_gripper()
     print('Moving to pregrasp')
-    sim.move_gripper_to([0.2, 0.1, 0.2, 0, 0, 0.7])
+    sim.move_gripper_to([0.2, 0.1, 0.2, 0, 0, 1.5])
     sim.run(epochs=100, autostop=False)
     print('Moving to grasp')
     sim.move_gripper_to([0.2, 0.1, 0.05, 0, 0, 0.7])

@@ -21,13 +21,13 @@ if __name__ == '__main__':
 
     assert(len(obj_fns) > 0)
 
-    sim = Simulator(gui=False, timestep=1./240., stop_th=1e-6, debug=True)
+    sim = Simulator(gui=True, timestep=1./240., stop_th=1e-6, debug=True)
     sim.cam.width = args.width
     sim.cam.height = args.height
 
     for obj_fn in obj_fns:
         sim.load(obj_fn)
-        sim.run()
+        sim.run(autostop=True)
         if sim.is_stable():
             obj_name = obj_fn.split('/')[-1].split('.')[-2]
             world_fn = obj_name + '_scene.csv'

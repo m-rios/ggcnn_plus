@@ -133,7 +133,7 @@ class Camera:
         n_u = 2.*u/self.width - 1
         n_v = 2.*v/self.height - 1
         ndc = np.array([n_u, n_v, -self._near, 1.])
-        # NDC to view
+        # NDC to world
         to = np.dot(self._reproject, ndc)[0:3]
         fr = np.array(self._pos)
         ray = to-fr
@@ -159,16 +159,34 @@ class Camera:
             p.addUserDebugLine(cn[:3,2],cn[:3,3])
             p.addUserDebugLine(cn[:3,3],cn[:3,1])
 
+    def compute_grasp(self, bb, depth):
+        """
+        Computes the center world coordinate and width size of a grasp defined
+        by its bounding box. bb is a (4,2) np array with the corners of the
+        grasp
+        """
+        center_pixels = np.mean(bb, axis=0).astype(np.int)
+        center_world = self.world_from_camera(center_pixels[1], center_pixels[0], depth)
+        corners_world = np.zeros((3,4))
+        # Width line
+        p1 = self.world_from_camera(bb[1,1], bb[1,0], depth)
+        p0 = self.world_from_camera(bb[0,1], bb[0,0], depth)
+        width = np.linalg.norm(p1-p0)
+
+        return center_world, width
+
 
 class Simulator:
 
-    def __init__(self, gui=False, timeout=60, timestep=1e-4, debug=False, epochs=10000, stop_th=1e-6, g=-10):
+    def __init__(self, gui=False, timeout=60, timestep=1e-4, debug=False,
+            epochs=10000, stop_th=1e-6, g=-10, bin_pos=[1.5, 1.5, 0.01]):
         self.gui = gui
         self.debug = debug
         self.epochs = epochs
         self.stop_th = stop_th
         self.timestep = timestep
         self.timeout = timeout
+        self.bin_pos = bin_pos
 
         if gui:
             mode = p.GUI
@@ -211,10 +229,6 @@ class Simulator:
 
         return bid
 
-    def load_shapenet(self, obj_id, pos=None, ori=None):
-        shapenet_path = os.environ['SHAPENET_PATH']
-        obj_fn = os.path.join(shapenet_path, obj_id, + '.obj')
-
     def obj_center(self, obj_fn):
         vertices = []
         with open(obj_fn, 'r') as f:
@@ -224,12 +238,12 @@ class Simulator:
                     vertices.append([float(x) for x in fields[1:4]])
 
         vertices = np.array(vertices)
-        #return vertices.mean(axis=0)
+        return vertices.mean(axis=0)
 
     def _load_obj(self, fn, pos, ori):
         visual_fn = fn
         collision_fn = fn.split('.')[-2] + '_vhacd.obj'
-        #visual_fn = collision_fn # for debuggin purposes
+        visual_fn = collision_fn # Temporary fix until precise vhacd decomposition achieved
         obj_id = fn.split('/')[-1].split('.')[-2]
 
         if not os.path.exists(collision_fn):
@@ -321,7 +335,7 @@ class Simulator:
                 qIndex = jointInfo[3]
                 if qIndex > -1:
                     p.resetJointState(Id,i,record[qIndex-7+17])
-            time.sleep(self.timestep)
+            #time.sleep(self.timestep)
 
     def _read_logfile(self, filename, verbose = True):
         f = open(filename, 'rb')
@@ -370,11 +384,10 @@ class Simulator:
     def evaluate_grasp(self, pose, width, log_fn=None):
         if log_fn:
             log = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, log_fn)
-        bin_pos = [2.5, 2.5, 0]
         if not self.gid:
             self.add_gripper('simulator/gripper.urdf')
-        if not self.bin:
-            self.bin = p.loadURDF('simulator/bin.urdf', basePosition=bin_pos)
+        #if not self.bin:
+        #    self.bin = p.loadURDF('simulator/bin.urdf', basePosition=self.bin_pos)
         self.open_gripper()
         # Move to pregrasp
         self.move_gripper_to(pose + np.array([0, 0, 0.1, 0, 0, 0]))
@@ -383,17 +396,25 @@ class Simulator:
         self.move_gripper_to(pose)
         self.close_gripper()
         # Move to postgrasp
-        self.move_gripper_to(pose + np.array([0, 0, 1.2, 0, 0, 0]))
-        # Drop object in bin
-        self.move_gripper_to(np.array([2.5, 2.5, 1.2, 0, 0, pose[5]]))
-        self.open_gripper()
-        self.run(epochs=int(4./self.timestep), autostop=True)
+        #self.move_gripper_to(pose + np.array([0, 0, 1.5, 0, 0, 0]))
+        self.move_gripper_to(np.array([0, 0, 1.5, 0, 0, 0]))
         bid = self.bodies.next()
         final_pos,_ = p.getBasePositionAndOrientation(bid)
         print('Final pos: ', final_pos)
         if log_fn:
             p.stopStateLogging(log)
-        return np.linalg.norm(np.array(final_pos[0:2]) - np.array(bin_pos[0:2])) < 0.7
+        return np.abs(final_pos[2] - 1.5) < 0.5
+
+        # Drop object in bin
+        self.move_gripper_to(np.array([self.bin_pos[0], self.bin_pos[1], 1.2, 0, 0, pose[5]]))
+        self.open_gripper()
+        self.run(epochs=int(4./self.timestep), autostop=False)
+        bid = self.bodies.next()
+        final_pos,_ = p.getBasePositionAndOrientation(bid)
+        print('Final pos: ', final_pos)
+        if log_fn:
+            p.stopStateLogging(log)
+        return np.linalg.norm(np.array(final_pos[0:2]) - np.array(self.bin_pos[0:2])) < 0.7
 
     def _remove_body(self, bId):
         del self.old_poses[bId]
@@ -449,7 +470,7 @@ class Simulator:
                 self.load(obj_fn, obj_pos, obj_ori)
                 print('Loaded '+ obj_fn)
 
-        p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
+        #p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
 
     def _update_pos(self):
         for id in self.bodies:
@@ -478,18 +499,30 @@ class Simulator:
         for joint in [6,7]:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                     targetPosition=width/2., maxVelocity=1)
-        self.run_action()
+        self.run(epochs=int(0.1/self.timestep))
 
-    def move_gripper_to(self, pose):
-        #g_pos = np.array(p.getBasePositionAndOrientation(self.gid)[0])
-        #pose[0:3] -= g_pos
-        #print 'Moving to {}'.format(pose)
-        pose[2] += 0.06
-        for joint in range(6):
+    def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2):
+        ang_tol = ang_tol*np.pi/180.
+        pose[2] += 0.02
+        for joint in range(3):
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                     targetPosition=pose[joint], maxVelocity=2)
-        #self.wait_move(pose)
-        self.run_action(tolerance=1e-3)
+        for joint in [3, 4, 5]:
+            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                    targetPosition=pose[joint], maxVelocity=15)
+
+        for _ in range(int(self.timeout/self.timestep)):
+            state = p.getLinkState(self.gid, 5)
+            pos = np.array(state[0])
+            ori = np.array(p.getEulerFromQuaternion(state[1]))
+            ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
+            if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
+                print('Arrived within tolerance')
+                break
+            p.stepSimulation()
+            self.sleep()
+        else:
+            print('Move timed out')
 
     def drawAABB(self, bb, parent=-1, color=black):
         bb = np.array(bb)
@@ -532,7 +565,7 @@ class Simulator:
             for bid in self.bodies:
                 self.drawFrame([0,0,0], bid)
 
-    def run(self, epochs=None, autostop=True):
+    def run(self, epochs=None, autostop=False):
         if epochs is None:
             epochs = self.epochs
         self.debug_viz()

@@ -26,7 +26,6 @@ def plot_output(name, rgb_img, depth_img, grasp_position_img, grasp_angle_img, n
         """
         Visualise the outputs.
         """
-        import ipdb; ipdb.set_trace() # BREAKPOINT
         grasp_position_img = gaussian(grasp_position_img, 5.0, preserve_range=True)
 
         if grasp_width_img is not None:
@@ -55,28 +54,31 @@ def plot_output(name, rgb_img, depth_img, grasp_position_img, grasp_angle_img, n
         ax.set_title('Grasp angle')
         plot = ax.imshow(grasp_angle_img, cmap='hsv', vmin=-np.pi / 2, vmax=np.pi / 2)
         plt.colorbar(plot)
-        plt.savefig(name)
-        plt.close(fig)
+        #plt.savefig(name)
+        #plt.close(fig)
+        plt.show()
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('model', help='path to the root directory of a model')
+    parser.add_argument('--grasps', default=1, help='Number of grasps predicted per image')
+    parser.add_argument('--logpath', default=os.environ['SIM_LOG_PATH'], help='Path to simulation log files')
+    parser.add_argument('--results_path', default=os.environ['RESULTS_PATH'], help='Path to simulation log files')
     parser.add_argument('-e', nargs='+', default=None, type=int, help='epochs to evaluate, if next arg is model, separate with -- ')
     parser.add_argument('-v', action='store_true', help='visualize model output')
 
     args = parser.parse_args()
 
-
     model_fns = glob.glob(args.model + '/*.hdf5')
-
     assert len(model_fns) > 0
+    model_name = model_fns[0].split('/')[-2]
 
     # Get input size and initialize simulator camera with it
     from keras.models import load_model
     _, height, width, _ = load_model(model_fns[0]).input_shape
 
-    sim = Simulator()
+    sim = Simulator(gui=False)
     sim.cam.height = height
     sim.cam.width = width
 
@@ -85,30 +87,59 @@ if __name__ == '__main__':
 
     assert len(input_fns) >= len(scene_fns), 'Missing input images of size ({},{})'.format(width, height)
 
+    model_results_path = os.path.join(args.results_path, model_name)
+    if not os.path.exists(model_results_path):
+        os.makedirs(model_results_path)
+    results_fn = model_results_path + '/results.txt'
+    results_f = open(results_fn, 'w')
+
+    input_idx, input_imgs = read_input(input_fns, width, height)
+    # Subtract mean
+    depth = input_imgs[:,:,:,3]
+    input_depth = depth.flatten() - depth.mean(axis=(1,2)).repeat(depth.shape[1]*depth.shape[2])
+    input_depth = input_depth.reshape(input_imgs.shape[0:3] + (1,))
+
     # Iterate through epochs
     for model_fn in model_fns:
-        model_name = model_fn.split('/')[-2]
         epoch = int(model_fn.split('_')[-2])
 
         if args.e is not None and epoch not in args.e:
             continue
 
+        base_log_fn = os.path.join(args.logpath, '{}_{}'.format(model_name, epoch))
+        if not os.path.exists(base_log_fn):
+            os.makedirs(base_log_fn)
+
         print('Evaluating epoch {} model {}'.format(model_name, epoch))
 
         model = load_model(model_fn)
-        input_idx, input_imgs = read_input(input_fns, width, height)
-        rgb = input_imgs[:,:,:,0:3].astype(np.uint8)
-        depth = np.expand_dims(input_imgs[:,:,:,3], 3)
 
-        model_output_data = model.predict(depth)
+        model_output_data = model.predict(input_depth)
         grasp_positions_out = model_output_data[0]
         grasp_angles_out = np.arctan2(model_output_data[2], model_output_data[1])/2.0
         grasp_width_out = model_output_data[3] * 150.0
 
+        results = []
+
         # Test results for each scene
         for scene_fn in scene_fns:
+            scene_name = scene_fn.split('/')[-1].split('.')[-2].split('_')[-2]
+            scene_idx = input_idx[scene_name]
             sim.restore(scene_fn, SHAPENET_PATH)
             # Compute grasp 6DOF coordiantes w.r.t camera frame
+            gs = detect_grasps(grasp_positions_out[scene_idx,].squeeze(),
+                    grasp_angles_out[scene_idx,].squeeze(),
+                    width_img=grasp_width_out[scene_idx,].squeeze(),
+                    no_grasps=args.grasps)[0]
             # Send grasp to simulator and evaluate
+            #plot_output(input_idx, input_imgs[scene_idx,:,:,0:3], input_depth[scene_idx].squeeze(),
+            #        grasp_positions_out[scene_idx].squeeze(), grasp_angles_out[scene_idx].squeeze(),
+            #        args.grasps, grasp_width_out[scene_idx].squeeze())
+            pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, depth[scene_idx][gs.center])
+            pose = np.concatenate((pose, [0, 0, gs.angle]))
+            results += [sim.evaluate_grasp(pose, grasp_width, base_log_fn + '/'+scene_name+'.log')]
+
+        success = np.sum(results)/float(len(scene_fns))
+        results_f.write('Epoch {}: {}%\n'.format(epoch, success))
 
 
