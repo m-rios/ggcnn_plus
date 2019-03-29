@@ -21,11 +21,12 @@ if __name__ == '__main__':
 
     assert(len(obj_fns) > 0)
 
-    sim = Simulator(gui=True, timestep=1./240., stop_th=1e-6, debug=True)
+    sim = Simulator(gui=False, timestep=1./240., stop_th=1e-6, debug=True)
     sim.cam.width = args.width
     sim.cam.height = args.height
 
     for obj_fn in obj_fns:
+        print('Processing: ' + obj_fn)
         sim.load(obj_fn)
         sim.run(autostop=True)
         if sim.is_stable():
