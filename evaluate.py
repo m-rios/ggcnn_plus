@@ -1,3 +1,15 @@
+"""
+Evaluation output:
+data:
+    evaluation:
+        model_name:
+            epoch:
+                output:
+                    output_imgs
+                sim_logs:
+                    sim_logs
+        results.txt
+"""
 import argparse
 import glob
 import os
@@ -22,7 +34,7 @@ def read_input(input_fns, width, height, ch=4):
 
     return index, input
 
-def plot_output(name, rgb_img, depth_img, grasp_position_img, grasp_angle_img, no_grasps=1, grasp_width_img=None):
+def plot_output(name, fn, rgb_img, depth_img, grasp_position_img, grasp_angle_img, no_grasps=1, grasp_width_img=None):
         """
         Visualise the outputs.
         """
@@ -54,9 +66,9 @@ def plot_output(name, rgb_img, depth_img, grasp_position_img, grasp_angle_img, n
         ax.set_title('Grasp angle')
         plot = ax.imshow(grasp_angle_img, cmap='hsv', vmin=-np.pi / 2, vmax=np.pi / 2)
         plt.colorbar(plot)
-        #plt.savefig(name)
+        plt.savefig(fn)
         #plt.close(fig)
-        plt.show()
+        #plt.show()
 
 if __name__ == '__main__':
 
@@ -64,7 +76,7 @@ if __name__ == '__main__':
     parser.add_argument('model', help='path to the root directory of a model')
     parser.add_argument('--grasps', default=1, help='Number of grasps predicted per image')
     parser.add_argument('--logpath', default=os.environ['SIM_LOG_PATH'], help='Path to simulation log files')
-    parser.add_argument('--results_path', default=os.environ['RESULTS_PATH'], help='Path to simulation log files')
+    parser.add_argument('-results_path', default=os.environ['RESULTS_PATH'], help='Path to simulation log files')
     parser.add_argument('-e', nargs='+', default=None, type=int, help='epochs to evaluate, if next arg is model, separate with -- ')
     parser.add_argument('-v', action='store_true', help='visualize model output')
 
@@ -103,12 +115,16 @@ if __name__ == '__main__':
     for model_fn in model_fns:
         epoch = int(model_fn.split('_')[-2])
 
+        epoch_results_path = os.path.join(model_results_path, str(epoch))
+        output_path = os.path.join(epoch_results_path, 'output')
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        sim_log_path = os.path.join(epoch_results_path, 'sim_logs')
+        if not os.path.exists(sim_log_path):
+            os.makedirs(sim_log_path)
+
         if args.e is not None and epoch not in args.e:
             continue
-
-        base_log_fn = os.path.join(args.logpath, '{}_{}'.format(model_name, epoch))
-        if not os.path.exists(base_log_fn):
-            os.makedirs(base_log_fn)
 
         print('Evaluating epoch {} model {}'.format(model_name, epoch))
 
@@ -132,12 +148,13 @@ if __name__ == '__main__':
                     width_img=grasp_width_out[scene_idx,].squeeze(),
                     no_grasps=args.grasps)[0]
             # Send grasp to simulator and evaluate
-            #plot_output(input_idx, input_imgs[scene_idx,:,:,0:3], input_depth[scene_idx].squeeze(),
-            #        grasp_positions_out[scene_idx].squeeze(), grasp_angles_out[scene_idx].squeeze(),
-            #        args.grasps, grasp_width_out[scene_idx].squeeze())
+            fn = os.path.join(output_path, scene_name + '.png')
+            plot_output(input_idx, fn, input_imgs[scene_idx,:,:,0:3], input_depth[scene_idx].squeeze(),
+                    grasp_positions_out[scene_idx].squeeze(), grasp_angles_out[scene_idx].squeeze(),
+                    args.grasps, grasp_width_out[scene_idx].squeeze())
             pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, depth[scene_idx][gs.center])
             pose = np.concatenate((pose, [0, 0, gs.angle]))
-            results += [sim.evaluate_grasp(pose, grasp_width, base_log_fn + '/'+scene_name+'.log')]
+            results += [sim.evaluate_grasp(pose, grasp_width, sim_log_path + '/'+scene_name+'.log')]
 
         success = np.sum(results)/float(len(scene_fns))
         results_f.write('Epoch {}: {}%\n'.format(epoch, success))
