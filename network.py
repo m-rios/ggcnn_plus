@@ -88,8 +88,9 @@ class Network:
         fig = self._get_output_plot(depth, positions, angles, widths, no_grasps)
         plt.show(fig)
 
-    def save_output_plot(self, depth, output, no_grasps=1):
-        pass
+    def save_output_plot(self, depth, positions, angles, widths, filename, no_grasps=1):
+        self._get_output_plot(depth, positions, angles, widths, no_grasps)
+        plt.savefig(filename)
 
     def read_input_from_scene_path(self, scene_path):
         input_fns = glob.glob(os.path.join(scene_path, '*.npy'))
@@ -128,6 +129,6 @@ if __name__ == '__main__':
     rgbs, depths = network.read_input_from_scene_path('simulator/scenes')
     positions, angles, widths = network.predict(depths)
     for img_idx in range(depths.shape[0]):
-        network.plot_output(depths[img_idx], positions[img_idx],
-                angles[img_idx], widths[img_idx])
+        network.save_output_plot(depths[img_idx], positions[img_idx],
+                angles[img_idx], widths[img_idx], '{}.png'.format(img_idx))
 
