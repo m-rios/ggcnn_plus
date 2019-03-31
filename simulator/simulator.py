@@ -32,8 +32,8 @@ class Camera(object):
 
     def _compute_depth(self, depth):
         normal = np.array(self._target) - np.array(self._pos)
-        for u in range(300):
-            for v in range(300):
+        for u in range(self.width):
+            for v in range(self.height):
                 pixel = np.array([2.*u/self.width - 1, 2.*v/self.height - 1, -1., 1])
                 point = np.dot(self._reproject, pixel)[0:3]
                 point /= np.linalg.norm(point)
@@ -84,14 +84,14 @@ class Camera(object):
 
     @height.setter
     def height(self, height):
-        self._height = pos
+        self._height = height
         self._update_camera_parameters()
 
     @property
     def width(self):
         return self._width
 
-    @height.setter
+    @width.setter
     def width(self, width):
         self._width = width
         self._update_camera_parameters()
@@ -589,10 +589,9 @@ class Simulator:
             if autostop and self.is_stable():
                 print('Stable')
                 break
+            self._update_pos()
         else:
             print('Unstable')
-
-            self._update_pos()
 
     def debug_run(self):
         p.removeAllUserDebugItems()

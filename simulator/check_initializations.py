@@ -1,12 +1,18 @@
 from simulator import Simulator
+import argparse
 import os
 import glob
 
-sim = Simulator(debug=True,timestep=1./240., gui=True, g=-10)
+parser = argparse.ArgumentParser()
+parser.add_argument('scenes_path')
+args = parser.parse_args()
 
-scene_fns = glob.glob('/Users/mario/Desktop/scenes/*.csv')
+sim = Simulator(debug=True,timestep=1e-4, gui=True, g=-10)
+
+scene_fns = glob.glob(args.scenes_path + '/*.csv')
 
 for scene_fn in scene_fns:
-    sim.restore(scene_fn, '/Volumes/Peregrine/obj_test')
-    sim.run(epochs=100)
+    sim.restore(scene_fn, os.environ['SHAPENET_PATH'])
+    sim.cam.snap()
+    sim.run(epochs=1000)
 
