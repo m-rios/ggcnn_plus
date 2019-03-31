@@ -14,14 +14,14 @@ blue = [0,0,1]
 black = [0,0,0]
 
 
-class Camera:
+class Camera(object):
 
     def __init__(self, width=300, height=300, pos=[0, 0, 2], target=np.zeros(3,), debug=False):
         self._width = width
         self._height = height
         self._target = target
-        self._near = 1
-        self._far = 2
+        self._near = 0.9
+        self._far =  5
         self._up = [0., 1., 0.]
         self._pos = pos
         self.debug = debug
@@ -34,7 +34,7 @@ class Camera:
         normal = np.array(self._target) - np.array(self._pos)
         for u in range(300):
             for v in range(300):
-                pixel = np.array([2.*u/300. - 1, 2.*v/300. - 1, -1., 1])
+                pixel = np.array([2.*u/self.width - 1, 2.*v/self.height - 1, -1., 1])
                 point = np.dot(self._reproject, pixel)[0:3]
                 point /= np.linalg.norm(point)
                 depth[v,u] /= np.dot(normal, point)
@@ -63,7 +63,7 @@ class Camera:
         return rgb, depth
 
     def _update_camera_parameters(self):
-        self._view = p.computeViewMatrix(self._pos, self.target, self._up)
+        self._view = p.computeViewMatrix(self._pos, self._target, self._up)
         self._projection = p.computeProjectionMatrixFOV(50, self.width/float(self.height), self._near, self._far)
         v = np.array(self._view).reshape(4,4).T
         pr = np.array(self._projection).reshape(4,4).T
@@ -85,16 +85,16 @@ class Camera:
     @height.setter
     def height(self, height):
         self._height = pos
-        self._update_camera_properties()
+        self._update_camera_parameters()
 
     @property
     def width(self):
         return self._width
 
     @height.setter
-    def height(self, height):
-        self._height = height
-        self._update_camera_properties()
+    def width(self, width):
+        self._width = width
+        self._update_camera_parameters()
 
     @property
     def target(self):
@@ -103,7 +103,7 @@ class Camera:
     @target.setter
     def target(self, target):
         self._target = target
-        self._update_camera_properties()
+        self._update_camera_parameters()
 
     def world_from_camera2(self, u, v, d):
         v = self.height - v
@@ -473,6 +473,16 @@ class Simulator:
                 self.load(obj_fn, obj_pos, obj_ori)
                 print('Loaded '+ obj_fn)
 
+        # Point camera to center of object clutter
+        nbodies = 0
+        pos = np.zeros(3)
+        for bid in self.bodies:
+            nbodies += 1
+            pos += np.array(p.getBasePositionAndOrientation(bid)[0])
+        pos /= nbodies
+        self.cam.target = pos.tolist()
+        print self.cam.target
+
         #p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
 
     def _update_pos(self):
@@ -577,7 +587,10 @@ class Simulator:
             p.stepSimulation()
             self.sleep()
             if autostop and self.is_stable():
+                print('Stable')
                 break
+        else:
+            print('Unstable')
 
             self._update_pos()
 

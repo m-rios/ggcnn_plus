@@ -2,12 +2,13 @@
 Class to easily handle Jacquard dataset
 """
 from skimage import io
-from ggcnn.dataset_processing.grasp import BoundingBox
+from ggcnn.dataset_processing.grasp import BoundingBox, BoundingBoxes
 
 import glob
 import os
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 class Jacquard:
 
@@ -84,13 +85,41 @@ class Jacquard:
 
         return bbs
 
+    def plot(self, key):
+        data = self[key]
+        depth = data['stereo_depth']
+        rgb = data['rgb']
+        bbs = BoundingBoxes(data['bounding_boxes'])
+
+        fig = plt.figure(figsize=(10, 5))
+
+        ax = fig.add_subplot(1, 2, 1)
+        ax.set_title('RGB')
+        ax.imshow(rgb)
+
+        for bb in bbs:
+            g = bb.as_grasp
+            g.plot(ax)
+
+        ax = fig.add_subplot(1, 2, 2)
+        ax.set_title('Depth')
+        ax.imshow(depth)
+
+        for bb in bbs:
+            g = bb.as_grasp
+            g.plot(ax)
+
+        plt.show()
+
 if __name__ == '__main__':
     d = Jacquard('data/datasets/raw/jacquard_samples')
-    for j in d:
-        print j['img_id']
-        print len(j['bounding_boxes'])
-    print 'train'
-    print d.train_keys
-    print 'test'
-    print d.test_keys
+    #for j in d:
+    #    print j['img_id']
+    #    print len(j['bounding_boxes'])
+    #print 'train'
+    #print d.train_keys
+    #print 'test'
+    #print d.test_keys
 
+    for k in d.keys:
+        d.plot(k)
