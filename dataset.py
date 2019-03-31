@@ -2,7 +2,7 @@
 Class to easily handle Jacquard dataset
 """
 from skimage import io
-from ggcnn.dataset_processing.grasp import BoundingBox, BoundingBoxes
+from ggcnn.dataset_processing.grasp import BoundingBox, BoundingBoxes, Grasp
 
 import glob
 import os
@@ -56,32 +56,10 @@ class Jacquard:
         grasps.drop_duplicates(subset=['x','y'], inplace=True)
         for id, grasp in grasps.iterrows():
             x, y, theta, width, size = grasp
-
-            theta = np.radians(float(theta))
-            # Vertices w.r.t. grasp center
-            x_off = width/2.0
-            y_off = size/2.0
-            bb = np.array([
-                [x_off, y_off ,1],
-                [-x_off, y_off ,1],
-                [-x_off, -y_off ,1],
-                [x_off, -y_off ,1]
-                ]).T
-            assert(bb.shape == (3,4))
-            # Transformation matrix to image frame of reference
-            T = np.array([
-                [np.cos(theta), np.sin(theta), 0],
-                [-np.sin(theta), np.cos(theta), 0],
-                [x, y, 1]
-                ]).T
-            # Apply transformation and swap coordinates for row/col
-            # coordinates
-            bb = np.matmul(T, bb).astype(int)
-            bb = bb[[1,0],:].T
-
-            assert(bb.shape == (4,2))
-
-            bbs.append(BoundingBox(bb))
+            angle = -np.radians(float(theta)) # Angle is horizontally mirrored
+            gs = Grasp((y, x), angle, float(width), float(size))
+            bbs.append(gs.as_bb)
+            break
 
         return bbs
 
