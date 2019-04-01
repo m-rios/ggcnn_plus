@@ -32,7 +32,6 @@ ds = h5py.File(args.dataset, 'r')
 scenes = ds['test']['img_id'][:]
 depth = ds['test']['depth_inpainted'][:]
 bbs = ds['test']['bounding_boxes'][:]
-import ipdb; ipdb.set_trace() # BREAKPOINT
 
 
 save_path = os.path.join(args.results, model_name, 'iou')
