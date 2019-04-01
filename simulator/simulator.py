@@ -62,12 +62,15 @@ class Camera(object):
         rgb = rgb.astype(np.uint8)
         return rgb, depth
 
+    def depth_buffer(self):
+        return p.getCameraImage(self._width, self._height, self._view, self._projection)[3]
+
     def _update_camera_parameters(self):
         self._view = p.computeViewMatrix(self._pos, self._target, self._up)
         self._projection = p.computeProjectionMatrixFOV(50, self.width/float(self.height), self._near, self._far)
         v = np.array(self._view).reshape(4,4).T
         pr = np.array(self._projection).reshape(4,4).T
-        self._reproject = np.dot(np.linalg.inv(v), np.linalg.inv(pr))
+        self._reproject = np.linalg.inv(np.dot(pr, v))
 
     @property
     def pos(self):
@@ -105,49 +108,35 @@ class Camera(object):
         self._target = target
         self._update_camera_parameters()
 
-    def world_from_camera2(self, u, v, d):
-        v = self.height - v
-        # Window to NDC transformation
-        n_u = 2.*u/self.width - 1
-        n_v = 2.*v/self.height - 1
-        ndc = np.array([n_u, n_v, -self._near, 1.])
-        # NDC to view
-        to = np.dot(self._reproject, ndc)[0:3]
-        fr = np.array(self._pos)
-        ray = to-fr
-        ray /= np.linalg.norm(ray)
-        tgt = np.array(self.target) - np.array(self.pos)
-        #d = d * np.linalg.norm(tgt) / np.dot(ray, tgt)
-        world = fr + ray*d
-
-        if self.debug:
-            p.addUserDebugLine(fr, fr + 3*(cn[:3,1]-fr)/np.linalg.norm(cn[:3,1]-fr))
-            p.addUserDebugLine(fr, world[0:3])
-
-
-        return world[0:3]
+    def depth_to_buffer(self, d):
+        f = float(self._far)
+        n = float(self._near)
+        return f/(f-n) - f*n/((f-n) * d)
 
     def world_from_camera(self, u, v, d):
         v = self.height - v
         # Window to NDC transformation
         n_u = 2.*u/self.width - 1
         n_v = 2.*v/self.height - 1
+        buffer_d = self.depth_to_buffer(d)
+        n_z = (2.*buffer_d - self._far - self._near)/(self._far - self._near)
+        n_z = buffer_d * 2. - 1.
         ndc = np.array([n_u, n_v, -self._near, 1.])
+        ndc = np.array([n_u, n_v, n_z, 1.])
         # NDC to world
-        to = np.dot(self._reproject, ndc)[0:3]
-        fr = np.array(self._pos)
-        ray = to-fr
-        ray /= np.linalg.norm(ray)
-        tgt = np.array(self.target) - np.array(self.pos)
-        d = d * np.linalg.norm(tgt) / np.dot(ray, tgt)
-        world = fr + ray*d
+        to = np.dot(self._reproject, ndc)[0:4]
+        return to[0:3]/to[3]
 
-        #if self.debug:
-        #    p.addUserDebugLine(fr, fr + 3*(cn[:3,1]-fr)/np.linalg.norm(cn[:3,1]-fr))
-        #    p.addUserDebugLine(fr, world[0:3])
-
-
-        return world[0:3]
+    def project(self, pt):
+        pt = np.array(pt + [1]).astype(np.float32)
+        v = np.array(self._view).reshape(4,4).T
+        pr = np.array(self._projection).reshape(4,4).T
+        pt = np.dot(v, pt)
+        pt = np.dot(pr, pt)
+        pt /= pt[3]
+        pt = pt[0:3]
+        pt *= [self.width/2., self.height/2., (self._far - self._near)/2.]
+        pt += [self.width/2., self.height/2., (self._near + self._far)/2.]
 
     def show_frustrum(self):
         if self.debug:
@@ -169,19 +158,26 @@ class Camera(object):
         center_world = self.world_from_camera(center_pixels[1], center_pixels[0], depth)
         corners_world = np.zeros((3,4))
         # Width line
-        p1 = self.world_from_camera(bb[1,1], bb[1,0], depth)
         p0 = self.world_from_camera(bb[0,1], bb[0,0], depth)
+        p1 = self.world_from_camera(bb[1,1], bb[1,0], depth)
+        p2 = self.world_from_camera(bb[2,1], bb[2,0], depth)
+        p3 = self.world_from_camera(bb[3,1], bb[3,0], depth)
         width = np.linalg.norm(p1-p0)
 
         if self.debug:
+            p.removeAllUserDebugItems()
             p.addUserDebugLine(self.pos, center_world)
+            p.addUserDebugLine(p0, p1, [0, 0, 0])
+            p.addUserDebugLine(p1, p2, [0, 1, 0])
+            p.addUserDebugLine(p2, p3, [0, 0, 0])
+            p.addUserDebugLine(p3, p0, [0, 1, 0])
 
         return center_world, width
 
 
 class Simulator:
 
-    def __init__(self, gui=False, timeout=60, timestep=1e-4, debug=False,
+    def __init__(self, gui=False, timeout=4, timestep=1e-4, debug=False,
             epochs=10000, stop_th=1e-6, g=-10, bin_pos=[1.5, 1.5, 0.01]):
         self.gui = gui
         self.debug = debug
@@ -389,6 +385,10 @@ class Simulator:
             log = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, log_fn)
         if not self.gid:
             self.add_gripper('simulator/gripper.urdf')
+        else:
+            for jid in [0,1,3,4,5]:
+                p.resetJointState(self.gid, jid, 0)
+            p.resetJointState(self.gid, 2, 1)
         #if not self.bin:
         #    self.bin = p.loadURDF('simulator/bin.urdf', basePosition=self.bin_pos)
         self.open_gripper()
@@ -451,7 +451,7 @@ class Simulator:
                 ori = p.getEulerFromQuaternion(ori)
                 obj_str = ','.join([obj_id] + [str(ps) for ps in pos] + [ str(o) for o in ori]) + '\n'
                 csv.write(obj_str)
-        p.saveBullet(fn.split('.')[-2] + '.bullet')
+        #p.saveBullet(fn.split('.')[-2] + '.bullet')
 
     def restore(self, fn, path):
         """
@@ -473,6 +473,11 @@ class Simulator:
                 self.load(obj_fn, obj_pos, obj_ori)
                 print('Loaded '+ obj_fn)
 
+        self.aim_camera_to_objects()
+
+        #p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
+
+    def aim_camera_to_objects(self):
         # Point camera to center of object clutter
         nbodies = 0
         pos = np.zeros(3)
@@ -482,8 +487,6 @@ class Simulator:
         pos /= nbodies
         self.cam.target = pos.tolist()
         print self.cam.target
-
-        #p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
 
     def _update_pos(self):
         for id in self.bodies:
@@ -515,27 +518,38 @@ class Simulator:
         self.run(epochs=int(0.1/self.timestep))
 
     def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2):
-        ang_tol = ang_tol*np.pi/180.
-        pose[2] += 0.02
-        for joint in range(3):
-            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                    targetPosition=pose[joint], maxVelocity=2)
-        for joint in [3, 4, 5]:
-            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                    targetPosition=pose[joint], maxVelocity=15)
+        try:
+            ang_tol = ang_tol*np.pi/180.
+            pose[2] += 0.02
+            for joint in range(3):
+                p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                        targetPosition=pose[joint], maxVelocity=2)
+            for joint in [3, 4, 5]:
+                p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                        targetPosition=pose[joint], maxVelocity=15)
+                print 'Sent angle ' + str(pose[joint])
 
-        for _ in range(int(self.timeout/self.timestep)):
-            state = p.getLinkState(self.gid, 5)
-            pos = np.array(state[0])
-            ori = np.array(p.getEulerFromQuaternion(state[1]))
-            ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
-            if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
-                print('Arrived within tolerance')
-                break
-            p.stepSimulation()
-            self.sleep()
-        else:
-            print('Move timed out')
+            for _ in range(int(self.timeout/self.timestep)):
+                state = p.getLinkState(self.gid, 5)
+                pos = np.array(state[0])
+                ori = np.array(p.getEulerFromQuaternion(state[1]))
+                ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
+                #print('Offset {} {}'.format(pose[0:3] - pos,
+                #    pose[3:6] - ori))
+                if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
+                    print('Arrived within tolerance')
+                    break
+                p.stepSimulation()
+                self.sleep()
+            else:
+                print('Move timed out. Offset {} {}'.format(pose[0:3] - pos,
+                    pose[3:6] - ori))
+                raw_input("Enter to continue")
+        except KeyboardInterrupt:
+            print 'Cancel move'
+            return
+        if self.debug:
+            self.cam.snap()
 
     def drawAABB(self, bb, parent=-1, color=black):
         bb = np.array(bb)
@@ -591,7 +605,8 @@ class Simulator:
                 break
             self._update_pos()
         else:
-            print('Unstable')
+            if autostop:
+                print('Unstable')
 
     def debug_run(self):
         p.removeAllUserDebugItems()
