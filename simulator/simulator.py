@@ -527,7 +527,6 @@ class Simulator:
             for joint in [3, 4, 5]:
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                         targetPosition=pose[joint], maxVelocity=15)
-                print 'Sent angle ' + str(pose[joint])
 
             for _ in range(int(self.timeout/self.timestep)):
                 state = p.getLinkState(self.gid, 5)
@@ -542,9 +541,7 @@ class Simulator:
                 p.stepSimulation()
                 self.sleep()
             else:
-                print('Move timed out. Offset {} {}'.format(pose[0:3] - pos,
-                    pose[3:6] - ori))
-                raw_input("Enter to continue")
+                print('Move timed out')
         except KeyboardInterrupt:
             print 'Cancel move'
             return
