@@ -41,7 +41,7 @@
         <parent link="z"/>
         <child link="r"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <limit effort="1000.0" lower="0" upper="6.283" velocity="0.01"/>
+        <limit effort="1000.0" lower="-1.58" upper="1.58" velocity="0.01"/>
         <axis xyz="1 0 0"/>
     </joint>
     <link name="p"/>
@@ -49,7 +49,7 @@
         <parent link="r"/>
         <child link="p"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <limit effort="1000.0" lower="0" upper="6.283" velocity="0.01"/>
+        <limit effort="1000.0" lower="-1.58" upper="1.58" velocity="0.01"/>
         <axis xyz="0 1 0"/>
     </joint>
 
@@ -72,7 +72,7 @@
         <parent link="p"/>
         <child link="base_link"/>
         <origin xyz="0 0 0" rpy="-1.57 0 0"/>
-        <limit effort="1000.0" lower="0" upper="6.283" velocity="0.5"/>
+        <limit effort="1000.0" lower="-1.58" upper="1.58" velocity="0.5"/>
         <axis xyz="0 -1 0"/>
     </joint>
 
