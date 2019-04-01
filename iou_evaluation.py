@@ -1,218 +1,98 @@
+import argparse
+import json
 import os
 import glob
-from random import shuffle
-import argparse
-
-import numpy as np
-import h5py
-
-
 import matplotlib.pyplot as plt
+import numpy as np
+import network as net
+
+from keras.models import load_model
 from skimage.filters import gaussian
+from ggcnn.dataset_processing.grasp import BoundingBoxes
+from ggcnn.dataset_processing import grasp
+from ggcnn.dataset_processing.image import DepthImage
+from dataset import Jacquard
 
-from ggcnn.dataset_processing.grasp import BoundingBoxes, detect_grasps
+parser = argparse.ArgumentParser()
+parser.add_argument('model', help='path to directory containing model epochs')
+parser.add_argument('--dataset', help='path to dataset descrition file')
+parser.add_argument('--results', default=os.environ['RESULTS_PATH'], help='path to directory where results should be saved')
+parser.add_argument('--perfect', action='store_true', help='Use perfect depth images [default False]')
+parser.add_argument('--n_grasps', default=1, type=int, help='Number of grasps to predict per image')
+parser.add_argument('--miniou', default=0.25, type=float, help='Min iou to consider successful')
+parser.add_argument('--saveviz', action='store_true', help='if true saves a visualization of network output')
+args = parser.parse_args()
 
-# Networks to test.
-NETWORK = 'ggcnn/data/networks/ggcnn_rss'  # glob synatx to output network folders.
-EPOCH = None  # Specify epoch or None to test all.
+model_fns = glob.glob(os.path.join(args.model, '*.hdf5'))
+assert len(model_fns) > 0, 'No model files were found'
+model_name = model_fns[0].split('/')[-2]
 
-WRITE_LOG = True
-LOGFILE = 'evaluation_output.txt'
+if args.dataset:
+    assert os.path.isfile(args.dataset) and args.dataset.split('.')[-1] == 'json'
+    with open(args.dataset) as f:
+        scenes = json.load(f)['test_ids']
+else:
+    raise NotImplementedError
 
-NO_GRASPS = 1  # Number of local maxima to check against ground truth grasps.
-EXPORT_VISUALIZATION = True
-VISUALISE_FAILURES = True
-VISUALISE_SUCCESSES = True
-EXPORT_PATH = 'data/evaluation/{}/{}'
-EXPORT_FN = os.path.join(EXPORT_PATH,'{}.png')
+jaq = Jacquard(os.environ['JACQUARD_PATH'])
+input_sz = load_model(model_fns[0]).input.shape.as_list()[1:3]
+depth_type = ['stereo_depth', 'perfect_depth'][args.perfect]
+depths = np.zeros(([len(scenes)] + input_sz))
+bbs = []
 
+for idx, scene in enumerate(scenes):
+    j_data = jaq[scene]
+    depth = DepthImage(j_data[depth_type])
+    depth.inpaint(missing_value=-1)
+    depth.img -= depth.img.mean()
+    gt = grasp.BoundingBoxes(j_data['bounding_boxes'])
 
-def write_log(s):
-    if WRITE_LOG:
-        with open(LOGFILE, 'a') as f:
-            f.write(s)
+    center = gt.center
+    left = max(0, min(center[1] - input_sz[1] // 2, depth.shape[1] - input_sz[1]))
+    right = min(depth.shape[1], left + input_sz[1])
 
+    top = max(0, min(center[0] - input_sz[0] // 2, depth.shape[0] - input_sz[0]))
+    bottom = min(depth.shape[0], top + input_sz[0])
+    depth.crop((top, left), (bottom, right))
+    depths[idx] = depth.img
+    gt.offset((-top, -left))
+    bbs.append(gt.to_array())
 
-def plot_output(name, rgb_img, depth_img, grasp_position_img, grasp_angle_img, ground_truth_bbs, no_grasps=1, grasp_width_img=None):
-        """
-        Visualise the outputs.
-        """
-        if not EXPORT_VISUALIZATION:
-            return
-        grasp_position_img = gaussian(grasp_position_img, 5.0, preserve_range=True)
+depth = np.expand_dims(depths, 3)
+bbs = np.array(bbs)
 
-        if grasp_width_img is not None:
-            grasp_width_img = gaussian(grasp_width_img, 1.0, preserve_range=True)
+save_path = os.path.join(args.results, model_name, 'iou')
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
 
-        gt_bbs = BoundingBoxes.load_from_array(ground_truth_bbs)
-        gs = detect_grasps(grasp_position_img, grasp_angle_img, width_img=grasp_width_img, no_grasps=no_grasps, ang_threshold=0)
+results_fn = os.path.join(save_path, 'iou.txt')
+results_f = open(results_fn, 'w')
 
-        fig = plt.figure(figsize=(10, 10))
-        ax = fig.add_subplot(2, 2, 1)
-        ax.set_title('RGB')
-        ax.imshow(rgb_img)
-        for g in gs:
-            m = g.arg_max_iou(gt_bbs)
-            if m is not None:
-                gt_bbs[m].plot(ax, 'b')
-            g.plot(ax, 'r')
+for model_fn in model_fns:
+    epoch = model_fn.split('_')[-2]
+    epoch_path = os.path.join(save_path, epoch)
+    if args.saveviz and not os.path.exists(epoch_path):
+        os.makedirs(epoch_path)
+    print('Evaluating epoch ' + epoch)
+    network = net.Network(model_fn)
+    positions, angles, widths = network.predict(depths, subtract_mean=False)
 
-        #for g in gt_bbs:
-        #    g.plot(ax, color='g')
+    succeeded, failed = net.calculate_iou_matches(positions, angles, bbs,
+            args.n_grasps, widths, args.miniou)
 
-        ax = fig.add_subplot(2, 2, 2)
-        ax.set_title('Depth')
-        ax.imshow(depth_img)
-        for g in gs:
-            m = g.arg_max_iou(gt_bbs)
-            if m is not None:
-                gt_bbs[m].plot(ax, 'b')
-            g.plot(ax, 'r')
+    if args.saveviz:
+        for idx in succeeded:
+            net.save_output_plot(depth[idx], positions[idx], angles[idx],
+                    widths[idx], epoch_path + '/s_{}.png'.format(idx),
+                    ground_truth=bbs[idx])
+        for idx in failed:
+            net.save_output_plot(depth[idx], positions[idx], angles[idx],
+                    widths[idx], epoch_path + '/f_{}.png'.format(idx),
+                    ground_truth=bbs[idx])
 
-        ax = fig.add_subplot(2, 2, 3)
-        ax.set_title('Grasp quality')
-        ax.imshow(grasp_position_img, cmap='Reds', vmin=0, vmax=1)
+    s = len(succeeded)
+    f = len(failed)
+    sr = float(s)/float(s+f)
 
-        ax = fig.add_subplot(2, 2, 4)
-        ax.set_title('Grasp angle')
-        plot = ax.imshow(grasp_angle_img, cmap='hsv', vmin=-np.pi / 2, vmax=np.pi / 2)
-        plt.colorbar(plot)
-        plt.savefig(name)
-        plt.close(fig)
+    results_f.write('Epoch {}: {}%\n'.format(epoch, sr))
 
-
-def calculate_iou_matches(grasp_positions_out, grasp_angles_out, ground_truth_bbs, no_grasps=1, grasp_width_out=None, min_iou=0.25):
-    """
-    Calculate a success score using the (by default) 25% IOU metric.
-    Note that these results don't really reflect real-world performance.
-    """
-    succeeded = []
-    failed = []
-    for i in range(grasp_positions_out.shape[0]):
-        grasp_position = grasp_positions_out[i, ].squeeze()
-        grasp_angle = grasp_angles_out[i, :, :].squeeze()
-
-        grasp_position = gaussian(grasp_position, 5.0, preserve_range=True)
-
-        if grasp_width_out is not None:
-            grasp_width = grasp_width_out[i, ].squeeze()
-            grasp_width = gaussian(grasp_width, 1.0, preserve_range=True)
-        else:
-            grasp_width = None
-
-        gt_bbs = BoundingBoxes.load_from_array(ground_truth_bbs[i, ].squeeze())
-        gs = detect_grasps(grasp_position, grasp_angle, width_img=grasp_width, no_grasps=no_grasps, ang_threshold=0)
-        for g in gs:
-            if g.max_iou(gt_bbs) > min_iou:
-                succeeded.append(i)
-                break
-        else:
-            failed.append(i)
-
-    return succeeded, failed
-
-
-def run(model_path, dataset_fn, export, epochs):
-    global NO_GRASPS, VISUALISE_FAILURES, VISUALISE_SUCCESSES
-
-    # Load the dataset data.
-    model_folders = glob.glob(model_path)
-    model_folders.sort()
-
-    for model_folder in model_folders:
-
-        model_name = model_folder.split('/')[-1]
-        print('Evaluating:  %s, epoch %s' % (model_folder, EPOCH))
-
-        write_log('\n')
-        write_log(model_name)
-        write_log('\t')
-
-        #dataset_fn = ''
-        #with open(os.path.join(model_folder, '_dataset.txt')) as f:
-        #    dataset_fn = f.readline()
-        #    if dataset_fn[-1] == '\n':
-        #        dataset_fn = dataset_fn[:-1]
-
-        #f = h5py.File(dataset_fn, 'r')
-        f = h5py.File(dataset_fn)
-
-        img_ids = np.array(f['test/img_id'])
-        rgb_imgs = np.array(f['test/rgb'])
-        depth_imgs = np.array(f['test/depth_inpainted'])
-        bbs_all = np.array(f['test/bounding_boxes'])
-
-        f.close()
-
-        epochs = [EPOCH]
-        if EPOCH is None:
-            # Get all of them
-            saved_models = glob.glob(os.path.join(model_folder, 'epoch_*_model.hdf5'))
-            saved_models.sort()
-            epochs = [int(s[-13:-11]) for s in saved_models]
-
-        for epoch in epochs:
-            epoch_name = model_name + '_{}'.format(epoch)
-            if EXPORT_VISUALIZATION:
-                if not os.path.exists(EXPORT_PATH.format(epoch_name, 'success')):
-                    os.makedirs(EXPORT_PATH.format(epoch_name, 'success'))
-                if not os.path.exists(EXPORT_PATH.format(epoch_name, 'failure')):
-                    os.makedirs(EXPORT_PATH.format(epoch_name, 'failure'))
-            # Load the output data.
-            model_output_fn = os.path.join(model_folder, 'epoch_%02d_val_output.npz' % epoch)
-            if os.path.exists(model_output_fn):
-                # Check if there's a pre-computed output.
-                model_output_data = np.load(model_output_fn)
-                grasp_positions_out = model_output_data['pos_out']
-                grasp_angles_out = model_output_data['angle_out']
-                grasp_width_out = model_output_data['grasp_width_out']
-            else:
-                # Load the model and compute the output.
-                print('No pre-computed values.  Computing now.')
-                model_checkpoint_fn = os.path.join(model_folder, 'epoch_%02d_model.hdf5' % epoch)
-                model = load_model(model_checkpoint_fn)
-                #input_data_fn = os.path.join(model_folder, '_val_input.npy')
-                #input_data = np.load(input_data_fn)
-                input_data = np.expand_dims(depth_imgs.copy(), axis=3)
-                model_output_data = model.predict(input_data)
-                grasp_positions_out = model_output_data[0]
-                grasp_angles_out = np.arctan2(model_output_data[2], model_output_data[1])/2.0
-                grasp_width_out = model_output_data[3] * 150.0
-
-            # IOU TESTING.
-            succeeded, failed = calculate_iou_matches(grasp_positions_out, grasp_angles_out, bbs_all, no_grasps=NO_GRASPS, grasp_width_out=grasp_width_out)
-
-            s = len(succeeded) * 1.0
-            f = len(failed) * 1.0
-            print('%s\t%s\t%s/%s\t%0.02f%s' % (model_folder.split('/')[-1], epoch, s, s+f, s/(s+f)*100.0, '%'))
-            write_log('%0.02f\t' % (s/(s+f)*100.0))
-
-            if VISUALISE_FAILURES and EXPORT_VISUALIZATION:
-                print('Plotting Failures')
-                shuffle(failed)
-                for i in failed:
-                    plot_output(EXPORT_FN.format(epoch_name, 'failure', i), rgb_imgs[i, ], depth_imgs[i, ], grasp_positions_out[i, ].squeeze(), grasp_angles_out[i, ].squeeze(), bbs_all[i, ],
-                                no_grasps=NO_GRASPS, grasp_width_img=grasp_width_out[i, ].squeeze())
-
-            if VISUALISE_SUCCESSES and EXPORT_VISUALIZATION:
-                print('Plotting Successes')
-                shuffle(succeeded)
-                for i in succeeded:
-                    plot_output(EXPORT_FN.format(epoch_name, 'success', i), rgb_imgs[i, ], depth_imgs[i, ], grasp_positions_out[i, ].squeeze(), grasp_angles_out[i, ].squeeze(), bbs_all[i, ],
-                                no_grasps=NO_GRASPS, grasp_width_img=grasp_width_out[i, ].squeeze())
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('model', help='path to model folder(s)')
-    parser.add_argument('dataset', help='path to dataset file')
-    parser.add_argument('-o', action='store_true', help='export success and failure visualization')
-    parser.add_argument('-e', nargs='?', default=None, help='export success and failure visualization')
-
-    args = parser.parse_args()
-    global EXPORT_VISUALIZATION
-    EXPORT_VISUALIZATION = args.o
-
-    from keras.models import load_model
-
-    run(args.model, args.dataset, args.o, args.e)
