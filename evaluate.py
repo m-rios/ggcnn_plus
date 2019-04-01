@@ -30,11 +30,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('model', help='path to the root directory of a model')
     parser.add_argument('--grasps', default=1, help='Number of grasps predicted per image')
-    parser.add_argument('--logpath', default=os.environ['SIM_LOG_PATH'], help='Path to simulation log files')
     parser.add_argument('--results_path', default=os.environ['RESULTS_PATH'], help='Path to simulation log files')
     parser.add_argument('--gui', action='store_true')
     parser.add_argument('-e', nargs='+', default=None, type=int, help='epochs to evaluate, if next arg is model, separate with -- ')
-    parser.add_argument('-v', action='store_true', help='visualize model output')
 
     args = parser.parse_args()
 

@@ -321,7 +321,7 @@ class Simulator:
     def replay(self, log_fn, scene_fn):
         self.restore(scene_fn, os.environ['SHAPENET_PATH'])
         self.add_gripper('/Users/mario/Developer/msc-thesis/simulator/gripper.urdf')
-        log = self._read_logfile(log_fn)
+        log = self._read_logfile(log_fn, verbose=False)
 
         for record in log:
             Id = record[2]
@@ -473,20 +473,19 @@ class Simulator:
                 self.load(obj_fn, obj_pos, obj_ori)
                 print('Loaded '+ obj_fn)
 
-        self.aim_camera_to_objects()
+        self.cam.target = self.get_clutter_center().tolist()
 
         #p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
 
-    def aim_camera_to_objects(self):
-        # Point camera to center of object clutter
+    def get_clutter_center(self):
+        # Find the center of all the objects in the scene
         nbodies = 0
         pos = np.zeros(3)
         for bid in self.bodies:
             nbodies += 1
             pos += np.array(p.getBasePositionAndOrientation(bid)[0])
         pos /= nbodies
-        self.cam.target = pos.tolist()
-        print self.cam.target
+        return pos
 
     def _update_pos(self):
         for id in self.bodies:
