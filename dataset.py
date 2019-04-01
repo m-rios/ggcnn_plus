@@ -59,7 +59,6 @@ class Jacquard:
             angle = -np.radians(float(theta)) # Angle is horizontally mirrored
             gs = Grasp((y, x), angle, float(width), float(size))
             bbs.append(gs.as_bb)
-            break
 
         return bbs
 

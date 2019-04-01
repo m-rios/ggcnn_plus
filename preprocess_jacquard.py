@@ -43,9 +43,10 @@ if not args.visualize:
         description[arg] = getattr(args, arg)
     description['creation_date'] = dt
     description['dataset_size'] = jaq.size * aug_factor
+    description['train_ids'] = jaq.train_keys.tolist()
+    description['test_ids'] = jaq.test_keys.tolist()
     with open(output_dataset_description_fn,'w') as json_description:
         json.dump(description, json_description, indent=2)
-
     output_ds = h5py.File(output_dataset_fn, 'w')
 
     fields = [
@@ -112,26 +113,28 @@ for subset in subsets:
             bbs = bounding_boxes_base.copy()
             bbs.rotate(angle, center)
 
-            left = max(0, min(center[1] - args.size // 2, depth.shape[1] - args.size))
-            right = min(depth.shape[1], left + args.size)
-
-            top = max(0, min(center[0] - args.size // 2, depth.shape[0] - args.size))
-            bottom = min(depth.shape[0], top + args.size)
-
-            depth.crop((top, left), (bottom, right))
-            bbs.offset((-top, -left))
-
             if args.zoom:
-                zoom_factor = np.random.uniform(0.4, 1.0)
+                zoom_factor = np.random.uniform(0.2, 1.0)
                 depth.zoom(zoom_factor)
-                depth.zoom(zoom_factor)
-                bbs.zoom(zoom_factor, (args.size//2, args.size//2))
+                #bbs.zoom(zoom_factor, (args.size//2, args.size//2))
+                bbs.zoom(zoom_factor, (1024//2, 1024//2))
+
+            #left = max(0, min(center[1] - args.size // 2, depth.shape[1] - args.size))
+            #right = min(depth.shape[1], left + args.size)
+
+            #top = max(0, min(center[0] - args.size // 2, depth.shape[0] - args.size))
+            #bottom = min(depth.shape[0], top + args.size)
+
+            #depth.crop((top, left), (bottom, right))
+            #bbs.offset((-top, -left))
+            depth.resize((args.size, args.size))
+            bbs.zoom(float(1024)/args.size, (float(1024)/args.size//2, float(1024)/args.size//2))
 
             pos_img, ang_img, width_img = bbs.draw(depth.shape)
 
             if args.visualize:
                 rgb = Image(scene['rgb'])
-                rgb.crop((top, left), (bottom, right))
+                #rgb.crop((top, left), (bottom, right))
                 fig, ax = plt.subplots(1,2)
                 mpldatacursor.datacursor(hover=True, bbox=dict(alpha=1, fc='w'),formatter='i, j = {i}, {j}\nz ={z:.02g}'.format)
                 ax[0].clear() # remove old bb
@@ -142,6 +145,7 @@ for subset in subsets:
                 ax[0].set_ylim((args.size), 0)
                 ax[0].set_title('rgb')
                 mp = depth.show(ax[1])
+                bbs.show(ax[1])
                 ax[1].set_title('depth')
                 plt.show()
             else:
