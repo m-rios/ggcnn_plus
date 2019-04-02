@@ -87,19 +87,25 @@ if __name__ == '__main__':
         for scene_idx, scene_fn in enumerate(scene_fns):
             scene_name = scene_fn.split('/')[-1].split('.')[-2].split('_')[-2]
             sim.restore(scene_fn, SHAPENET_PATH)
-            # Compute grasp 6DOF coordiantes w.r.t camera frame
-            gs = net.get_grasps_from_output(positions[scene_idx],
-                    angles[scene_idx], widths[scene_idx], n_grasps=args.grasps)[0]
 
             if not args.gui:
                 fn = os.path.join(output_path, scene_name +'.png')
                 net.save_output_plot(depth[scene_idx], positions[scene_idx],
                         angles[scene_idx], widths[scene_idx], fn, args.grasps)
 
-            pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, depth[scene_idx][gs.center])
-            pose = np.concatenate((pose, [0, 0, gs.angle]))
+            # Compute grasp 6DOF coordiantes w.r.t camera frame
+            gs = net.get_grasps_from_output(positions[scene_idx],
+                    angles[scene_idx], widths[scene_idx], n_grasps=args.grasps)
+            if len(gs) > 0:
+                gs = gs[0]
 
-            result = sim.evaluate_grasp(pose, grasp_width, sim_log_path + '/'+scene_name+'.log')
+                pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, depth[scene_idx][gs.center])
+                pose = np.concatenate((pose, [0, 0, gs.angle]))
+
+                result = sim.evaluate_grasp(pose, grasp_width, sim_log_path + '/'+scene_name+'.log')
+            else:
+                result = False
+
             if not result:
                 failures.write(scene_name + '\n')
             results += result
