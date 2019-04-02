@@ -62,6 +62,9 @@ if __name__ == '__main__':
     for model_fn in model_fns:
         epoch = int(model_fn.split('_')[-2])
 
+        if args.e is not None and epoch not in args.e:
+            continue
+
         epoch_results_path = os.path.join(model_results_path, str(epoch))
         output_path = os.path.join(epoch_results_path, 'output')
         if not os.path.exists(output_path):
@@ -70,8 +73,6 @@ if __name__ == '__main__':
         if not os.path.exists(sim_log_path):
             os.makedirs(sim_log_path)
 
-        if args.e is not None and epoch not in args.e:
-            continue
 
         print('Evaluating epoch {} model {}'.format(model_name, epoch))
 
