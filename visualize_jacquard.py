@@ -9,8 +9,8 @@ args = parser.parse_args()
 
 if __name__ == '__main__':
     ds = h5py.File(args.dataset, 'r')
-    depths = ds['test']['depth_inpainted'][:]
-    bbs = ds['test']['bounding_boxes'][:]
+    depths = ds['test']['depth_inpainted']
+    bbs = ds['test']['bounding_boxes']
 
     for idx in range(depths.shape[0]):
         fig = plt.figure(figsize=(10, 10))

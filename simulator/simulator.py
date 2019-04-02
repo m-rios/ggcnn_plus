@@ -1,4 +1,5 @@
 import pybullet as p
+import cv2
 import struct
 import pybullet_data
 import numpy as np
@@ -322,8 +323,12 @@ class Simulator:
         self.restore(scene_fn, os.environ['SHAPENET_PATH'])
         self.add_gripper('/Users/mario/Developer/msc-thesis/simulator/gripper.urdf')
         log = self._read_logfile(log_fn, verbose=False)
+        video_fn = log_fn.replace('.log', '.mp4')
+        video = cv2.VideoWriter(video_fn, 0x00000021, 25, (300, 300))
+        self.cam.pos = [0, -.7, 2.]
+        self.cam.target = [0,0, 0]
 
-        for record in log:
+        for idx, record in enumerate(log):
             Id = record[2]
             pos = [record[3],record[4],record[5]]
             orn = [record[6],record[7],record[8],record[9]]
@@ -335,6 +340,9 @@ class Simulator:
                 if qIndex > -1:
                     p.resetJointState(Id,i,record[qIndex-7+17])
             #time.sleep(self.timestep)
+            if idx % 500 == 0:
+                rgb = self.cam.snap()[0]
+                video.write(rgb)
 
     def _read_logfile(self, filename, verbose = True):
         f = open(filename, 'rb')
