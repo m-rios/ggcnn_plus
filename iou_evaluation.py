@@ -18,10 +18,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('model', help='path to directory containing model epochs')
 parser.add_argument('dataset', help='path to hdf5 dataset file')
 parser.add_argument('--results', default=os.environ['RESULTS_PATH'], help='path to directory where results should be saved')
-parser.add_argument('--perfect', action='store_true', help='Use perfect depth images [default False]')
 parser.add_argument('--n_grasps', default=1, type=int, help='Number of grasps to predict per image')
 parser.add_argument('--miniou', default=0.25, type=float, help='Min iou to consider successful')
 parser.add_argument('--saveviz', action='store_true', help='if true saves a visualization of network output')
+parser.add_argument('--epochs', nargs='+',default=None, type=int, help='epochs to evaluate')
 args = parser.parse_args()
 
 model_fns = glob.glob(os.path.join(args.model, '*.hdf5'))
@@ -43,6 +43,8 @@ results_f = open(results_fn, 'w')
 
 for model_fn in model_fns:
     epoch = model_fn.split('_')[-2]
+    if args.epochs is not None and int(epoch) not in args.epochs:
+        continue
     epoch_path = os.path.join(save_path, epoch)
     if args.saveviz and not os.path.exists(epoch_path):
         os.makedirs(epoch_path)
