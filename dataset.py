@@ -69,7 +69,7 @@ class Jacquard:
         bbs = BoundingBoxes(data['bounding_boxes'])
 
         fig = plt.figure(figsize=(10, 5))
-
+        fig.suptitle(key)
         ax = fig.add_subplot(1, 2, 1)
         ax.set_title('RGB')
         ax.imshow(rgb)
