@@ -324,7 +324,7 @@ class Simulator:
         self.add_gripper('/Users/mario/Developer/msc-thesis/simulator/gripper.urdf')
         log = self._read_logfile(log_fn, verbose=False)
         video_fn = log_fn.replace('.log', '.mp4')
-        video = cv2.VideoWriter(video_fn, 0x00000021, 25, (300, 300))
+        video = cv2.VideoWriter(video_fn, 0, 25, (300, 300))
         self.cam.pos = [0, -.7, 2.]
         self.cam.target = [0,0, 0]
 

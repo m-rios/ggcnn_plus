@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     assert(len(obj_fns) > 0)
 
-    sim = Simulator(gui=False, epochs=int(5/1e-4), timestep=1./240.,
+    sim = Simulator(gui=True, epochs=int(5/1e-4), timestep=1./240.,
             stop_th=1e-6, debug=True)
     sim.cam.width = args.width
     sim.cam.height = args.height
@@ -34,7 +34,7 @@ if __name__ == '__main__':
             obj_name = obj_fn.split('/')[-1].split('.')[-2]
             world_fn = obj_name + '_scene.csv'
             sim.save(os.path.join(args.export, world_fn))
-            sim.aim_camera_to_objects()
+            sim.cam.target = sim.get_clutter_center().tolist()
             rgb, depth = sim.cam.snap()
             input = np.zeros((args.height, args.width, 4))
             input[:,:,0:3] = rgb[:,:,0:3]
