@@ -1,4 +1,5 @@
 import pybullet as p
+import skvideo.io
 import cv2
 import struct
 import pybullet_data
@@ -8,20 +9,58 @@ import time
 import math
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
+from wavefront import Obj
 
 red = [1,0,0]
 green = [0,1,0]
 blue = [0,0,1]
 black = [0,0,0]
 
+VIDEO_LOGGER = 0
+STATE_LOGGER = 1
+
+class VideoLogger(object):
+    def __init__(self, log_fn, timestep, rate=2.0, size=(300, 300), pos=[0, -.7, 2.]):
+        codec = cv2.VideoWriter_fourcc(*'MJPG')
+        self.video = skvideo.io.FFmpegWriter(log_fn)
+        #self.video2 = cv2.VideoWriter(log_fn, codec, 25., size)
+        self.rate = rate
+        self.fn = log_fn
+        self.cam = Camera(width=size[0], height=size[1], pos=pos)
+        self.timestep = timestep
+        self.epoch = 0
+        self.buffer = np.zeros((1, 300, 300, 3), dtype=np.uint8)
+
+    def log(self):
+        if self.epoch % (1./self.timestep//self.rate) == 0:
+            rgb = self.cam.snap()[0]
+            rgb = rgb[:,:,0:3].astype(np.uint8).reshape(1,300,300,3)
+            #self.buffer = np.append(self.buffer, rgb, axis=0)
+            self.video.writeFrame(rgb)
+            #self.video2.write(rgb)
+        self.epoch += 1
+
+    def close(self):
+        #skvideo.io.vwrite(self.fn, self.buffer)
+        self.video.close()
+
+class StateLogger(object):
+    def __init__(self, log_fn, timestep, rate=2.0):
+        self.log_fn = log_fn
+
+    def log(self):
+        log = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, self.log_fn)
+
+    def close(self):
+        p.stopLogging()
 
 class Camera(object):
 
-    def __init__(self, width=300, height=300, pos=[0, 0, 2], target=np.zeros(3,), debug=False):
+    def __init__(self, width=300, height=300, fov=40, pos=[0, 0, 1.5], target=np.zeros(3,), debug=False):
         self._width = width
         self._height = height
         self._target = target
-        self._near = 0.9
+        self._near = 0.1
         self._far =  5
         self._up = [0., 1., 0.]
         self._pos = pos
@@ -29,6 +68,7 @@ class Camera(object):
         self._view = None
         self._projection = None
         self._reproject = None
+        self._fov = fov
         self._update_camera_parameters()
 
     def _compute_depth(self, depth):
@@ -57,18 +97,24 @@ class Camera(object):
 
         return rgb, depth
 
-    def snap(self):
-        _, _, rgb, depth, _ = p.getCameraImage(self._width, self._height, self._view, self._projection)
+    def snap(self, segmentation=False):
+        _, _, rgb, depth, mask = p.getCameraImage(self._width, self._height, self._view, self._projection)
+        rgb = np.array(rgb).reshape(self.height, self.width, 4)
+        depth = np.array(depth).reshape(self.height, self.width)
+        mask = np.array(mask).reshape(self.height, self.width).astype(np.bool)
         depth = self._far * self._near / (self._far - (self._far - self._near) * depth)
         rgb = rgb.astype(np.uint8)
-        return rgb, depth
+        if segmentation:
+            return rgb, depth, mask
+        else:
+            return rgb, depth
 
     def depth_buffer(self):
         return p.getCameraImage(self._width, self._height, self._view, self._projection)[3]
 
     def _update_camera_parameters(self):
         self._view = p.computeViewMatrix(self._pos, self._target, self._up)
-        self._projection = p.computeProjectionMatrixFOV(50, self.width/float(self.height), self._near, self._far)
+        self._projection = p.computeProjectionMatrixFOV(self._fov, self.width/float(self.height), self._near, self._far)
         v = np.array(self._view).reshape(4,4).T
         pr = np.array(self._projection).reshape(4,4).T
         self._reproject = np.linalg.inv(np.dot(pr, v))
@@ -183,6 +229,7 @@ class Simulator:
         self.gui = gui
         self.debug = debug
         self.epochs = epochs
+        self.epoch = 0
         self.stop_th = stop_th
         self.timestep = timestep
         self.timeout = timeout
@@ -205,6 +252,7 @@ class Simulator:
         self.old_poses = {}
         self.obj_ids = {}
         self.cam = Camera(debug=debug)
+        self.logger = None
 
     @property
     def bodies(self):
@@ -213,7 +261,7 @@ class Simulator:
             if bid != self.planeId and bid != self.gid and bid != self.bin:
                 yield bid
 
-    def load(self, fn, pos=None, ori=None):
+    def load(self, fn, pos=None, ori=None, scale=1):
         extension = fn.split('.')[-1].lower()
         assert extension == 'urdf' or extension == 'obj'
 
@@ -222,7 +270,9 @@ class Simulator:
                 pos = [0,0,0]
             bid = p.loadURDF(fn, basePosition=pos)
         else:
-            bid = self._load_obj(fn, pos, ori)
+            #bid = self._load_obj(fn, pos, ori)
+            bid = self.load_scale(fn, pos, ori, scale)
+
 
         self.old_poses[bid] = self._get_pose(bid)
         self.obj_ids[bid] = fn.split('/')[-1].split('.')[-2]
@@ -239,6 +289,53 @@ class Simulator:
 
         vertices = np.array(vertices)
         return vertices.mean(axis=0)
+
+    def read_scale(self, obj_id):
+        try:
+            scales = pd.read_csv('/home/mario/Developer/msc-thesis/simulator/scales.csv')
+            scales.set_index('obj_id', inplace=True)
+            return scales.loc[obj_id].scale
+        except Exception as e:
+            print 'Error \"{} {}\" while reading scales file. Falling back to scale=1'.format(type(e).__name__, e)
+            return 1
+
+    def load_scale(self, fn, pos=None, ori=None, scale=1):
+        visual_fn =fn
+        collision_fn = fn.replace('.obj', '_vhacd.obj')
+        visual_fn = collision_fn
+        obj_id = fn.split('/')[-1].replace('.obj', '')
+
+        if not os.path.exists(collision_fn):
+            print('''No collision model for {} was found. Falling back to
+                    visual model as collision geometry. This might impact
+                    performance of your simulation''').format(visual_fn)
+            collision_fn = visual_fn
+
+        obj = Obj(visual_fn)
+        size = obj.size
+        max_size = size.max()
+        scale = np.clip(max_size, 0.08, 0.9)/max_size * scale
+        center = obj.center * scale
+
+        if pos is None:
+            pos = np.array([0, 0, max_size * scale])
+
+        if ori is None:
+            ori = [0, 0, 0]
+        ori = p.getQuaternionFromEuler(ori)
+
+        vid = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
+                rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=[scale]*3,
+                visualFramePosition=-center)
+        cid = p.createCollisionShape(shapeType=p.GEOM_MESH,
+                fileName=collision_fn, meshScale=[scale]*3,
+                collisionFramePosition=-center)
+        bid =  p.createMultiBody(baseMass=max_size*scale,baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cid, baseVisualShapeIndex = vid, basePosition=pos, baseOrientation=ori)
+
+        if self.debug:
+            self.drawFrame([0,0,0], bid)
+
+        return bid
 
     def _load_obj(self, fn, pos, ori):
         visual_fn = fn
@@ -277,24 +374,16 @@ class Simulator:
 
         scale = np.repeat(scale, 3).astype(np.float)
 
-        # First load obj to get aabb
-        vId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn, rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=scale)
-        cId = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=collision_fn, meshScale=scale)
-        bId = p.createMultiBody(baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cId, baseVisualShapeIndex = vId)
-        aabb = np.array(p.getAABB(bId))
-        p.removeBody(bId)
-
-        # Compute size and reload with proper shift
-        size = np.abs(aabb[1] - aabb[0])
+        obj = Obj(visual_fn)
+        size = obj.size * scale
         max_dim = np.argmax(size)
         new_scale = np.clip(size[max_dim], 0.08, 0.9)/size[max_dim]
         size *= new_scale
         scale *= np.repeat(new_scale, 3)
-
         center = self.obj_center(visual_fn)
         center *= scale
 
-
+        import ipdb; ipdb.set_trace() # BREAKPOINT
         if pos is None:
             start_pos = np.zeros((3,))
             start_pos[2] = np.max(size)
@@ -303,6 +392,7 @@ class Simulator:
 
         if ori is None:
             start_ori = np.random.uniform(0, 2*np.pi, (3,)).tolist()
+            start_ori = [0, 0, 0]
             start_ori = p.getQuaternionFromEuler(start_ori)
         else:
             start_ori = p.getQuaternionFromEuler(ori)
@@ -318,6 +408,15 @@ class Simulator:
             self.drawFrame([0,0,0], bId)
 
         return bId
+
+    def transform(self, bid, position=None, rotation=None, scale=None):
+        if position is not None:
+            _, ori = self._get_pose(bid)
+            p.resetBasePositionAndOrientation(bid,position, ori)
+        if rotation is not None:
+            pos,_ = self._get_pose(bid)
+            rot = p.getQuaternionFromEuler(rotation)
+            p.resetBasePositionAndOrientation(bid,pos, rot)
 
     def replay(self, log_fn, scene_fn):
         self.restore(scene_fn, os.environ['SHAPENET_PATH'])
@@ -388,9 +487,7 @@ class Simulator:
         self.drawFrame([0,0,0])
         p.resetJointState(self.gid, 2, 1)
 
-    def evaluate_grasp(self, pose, width, log_fn=None):
-        if log_fn:
-            log = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, log_fn)
+    def evaluate_grasp(self, pose, width):
         if not self.gid:
             self.add_gripper('simulator/gripper.urdf')
         else:
@@ -412,20 +509,8 @@ class Simulator:
         bid = self.bodies.next()
         final_pos,_ = p.getBasePositionAndOrientation(bid)
         print('Final pos: ', final_pos)
-        if log_fn:
-            p.stopStateLogging(log)
         return np.abs(final_pos[2] - 1.5) < 0.5
 
-        # Drop object in bin
-        self.move_gripper_to(np.array([self.bin_pos[0], self.bin_pos[1], 1.2, 0, 0, pose[5]]))
-        self.open_gripper()
-        self.run(epochs=int(4./self.timestep), autostop=False)
-        bid = self.bodies.next()
-        final_pos,_ = p.getBasePositionAndOrientation(bid)
-        print('Final pos: ', final_pos)
-        if log_fn:
-            p.stopStateLogging(log)
-        return np.linalg.norm(np.array(final_pos[0:2]) - np.array(self.bin_pos[0:2])) < 0.7
 
     def _remove_body(self, bId):
         del self.old_poses[bId]
@@ -478,7 +563,8 @@ class Simulator:
                 obj_fn = os.path.join(path, fields[0] + '.obj')
                 obj_pos = [float(fields[1]),float(fields[2]),float(fields[3])]
                 obj_ori = [float(fields[4]),float(fields[5]),float(fields[6])]
-                self.load(obj_fn, obj_pos, obj_ori)
+                scale = self.read_scale(fields[0])
+                self.load(obj_fn, obj_pos, obj_ori, scale)
                 print('Loaded '+ obj_fn)
 
         self.cam.target = self.get_clutter_center().tolist()
@@ -515,10 +601,10 @@ class Simulator:
         self.set_gripper_width(0)
 
     def open_gripper(self):
-        self.set_gripper_width(0.1)
+        self.set_gripper_width(0.3)
 
     def set_gripper_width(self, width):
-        width = 0.1 - width
+        width = 0.3 - width
         for joint in [6,7]:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                     targetPosition=width/2., maxVelocity=1)
@@ -545,8 +631,7 @@ class Simulator:
                 if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
                     print('Arrived within tolerance')
                     break
-                p.stepSimulation()
-                self.sleep()
+                self.step()
             else:
                 print('Move timed out')
         except KeyboardInterrupt:
@@ -602,8 +687,7 @@ class Simulator:
         self.debug_viz()
 
         for i in range(epochs):
-            p.stepSimulation()
-            self.sleep()
+            self.step()
             if autostop and self.is_stable():
                 print('Stable')
                 break
@@ -623,8 +707,7 @@ class Simulator:
         p.addUserDebugParameter("width",0,0.1,0)
         old_values = [0]*7
         while True:
-            p.stepSimulation()
-            self.sleep()
+            self.step()
             values = [p.readUserDebugParameter(id) for id in range(7)]
             values[6] /= 2.
             values.append(-values[6])
@@ -632,28 +715,31 @@ class Simulator:
                     controlMode=p.POSITION_CONTROL, targetPositions=values)
 
     def run_action(self, tolerance=1e-2):
-        p.stepSimulation()
-        self.sleep()
+        self.step()
         velocities = lambda: [joint[1] for joint in p.getJointStates(self.gid, range(8))]
 
         for _ in range(int(self.timeout/self.timestep)):
             if (np.abs(np.array(velocities())) < tolerance).all():
                 break
-            p.stepSimulation()
-            self.sleep()
+            self.step()
         else:
             print('Action timed out')
 
-    def wait_move(self, goal, pos_tol=1e-3, ang_tol=1e-2):
+    def step(self):
         p.stepSimulation()
         self.sleep()
-        pos = lambda: np.array(p.getLinkState(self.gid, 5)[0])
-        ori = lambda: np.array(p.getEulerFromQuaternion(p.getLinkState(self.gid, 5)[1]))
-        goal = np.array(goal)
+        if self.logger is not None:
+            self.logger.log()
 
-        for _ in range(int(self.timeout/self.timestep)):
-            import ipdb; ipdb.set_trace() # BREAKPOINT
-            if (np.abs(pos() - goal[0:3]) < pos_tol).all() and np.min(np.vstack((np.abs(goal[3:6] - ori()), np.abs(ori() - goal[3:6]))), axis=0):
-                pass
-        pass
+    def start_log(self, fn, logger=VIDEO_LOGGER, rate=25):
+        assert logger == VIDEO_LOGGER or logger == STATE_LOGGER
+        if logger == VIDEO_LOGGER:
+            self.logger = VideoLogger(fn, self.timestep, rate)
+        elif logger == STATE_LOGGER:
+            self.logger = StateLogger(fn, self.timestep, rate)
+
+    def stop_log(self):
+        if self.logger is not None:
+            self.logger.close()
+            self.logger = None
 
