@@ -1,0 +1,91 @@
+# accessories
+Vase
+Animal Bear, Bird, Cat, Dog, Cow, Butterfly, Elephant, Fish, Horse, Rabbit, Sheep, Giraffe
+FoodItem FruitBowl, CerealBox, Chocolate, Cookie, MilkCarton, Pizza, Donut, Fruit, Sandwich, Apple, Orange, Carrot
+Battery   AAABattery, AABattery
+Airplane
+Bag Backpack, Purse
+Ball
+Basket
+Bicycle
+Book
+Books
+Bowl
+Bucket
+Bus
+Cabling
+Cage
+Calculator
+Camera DSLRCamera, WebCam
+CanOpener
+Candle
+Canister
+Cap
+Car
+Cassette
+Coaster
+Coin
+Computer Desktop, Laptop
+ComputerMouse
+Controller
+DecorativeAccessory
+DrinkingUtensil Teacup, WineGlass, Cup, Mug
+Eraser
+Fork
+Glasses
+Guitar
+Gun
+Hammer
+Hanger
+Harp
+Hat
+Headphones
+Helicopter
+Kettle
+Keyboard
+Knife
+Magnet
+Marker
+Motorcycle
+MousePad
+Notepad
+Pan
+Paper
+PaperBox
+PaperClip
+Pen
+Pencil
+PersonStanding
+Phone  Telephone, CellPhone
+PictureFrame
+PillBottle
+Plate
+Radio
+Ring
+RubiksCube
+Scissors
+ScrewDriver
+Shampoo
+Ship
+Shoes
+SoapBar
+SodaCan
+Spoon
+Stapler
+Statue
+Sword
+Tank
+Teapot
+TissueBox
+ToiletPaper
+ToyFigure
+TrashBin
+Truck
+USBStick
+Umbrella
+Vase
+Violin
+Wallet
+Washer
+Watch
+Bottle WineBottle, DrinkBottle, BeerBottle

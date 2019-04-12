@@ -15,10 +15,11 @@ import glob
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from skimage.filters import gaussian
 from ggcnn.dataset_processing.grasp import detect_grasps, BoundingBoxes
-from simulator.simulator import Simulator
+from simulator.simulator import Simulator, VIDEO_LOGGER, STATE_LOGGER
 import network as net
 
 SCENES_PATH = os.environ['GGCNN_SCENES_PATH']
@@ -102,7 +103,9 @@ if __name__ == '__main__':
                 pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, depth[scene_idx][gs.center])
                 pose = np.concatenate((pose, [0, 0, gs.angle]))
 
-                result = sim.evaluate_grasp(pose, grasp_width, sim_log_path + '/'+scene_name+'.log')
+                sim.start_log(sim_log_path + '/'+scene_name+'.mp4', VIDEO_LOGGER, rate=25)
+                result = sim.evaluate_grasp(pose, grasp_width)
+                sim.stop_log()
             else:
                 result = False
 

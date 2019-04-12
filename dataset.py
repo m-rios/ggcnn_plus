@@ -40,6 +40,7 @@ class Jacquard:
             'rgb': io.imread(base_fn + '_RGB.png'),
             'stereo_depth': io.imread(base_fn + '_stereo_depth.tiff'),
             'perfect_depth': io.imread(base_fn + '_perfect_depth.tiff'),
+            'mask': io.imread(base_fn + '_mask.png').astype(np.bool),
             'bounding_boxes': self._load_grasps(key)
         }
         return item

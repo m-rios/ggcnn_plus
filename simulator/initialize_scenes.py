@@ -3,6 +3,7 @@ import argparse
 import os
 import numpy as np
 from simulator import Simulator
+import simulator as s
 
 if __name__ == '__main__':
 
@@ -21,7 +22,7 @@ if __name__ == '__main__':
 
     assert(len(obj_fns) > 0)
 
-    sim = Simulator(gui=True, epochs=int(5/1e-4), timestep=1./240.,
+    sim = Simulator(gui=False, epochs=int(5/1e-4), timestep=1./240.,
             stop_th=1e-6, debug=True)
     sim.cam.width = args.width
     sim.cam.height = args.height

@@ -57,13 +57,13 @@
     <link name="base_link">
         <visual>
             <geometry>
-                <box size="0.12 0.01 0.02"/>
+                <box size="0.32 0.01 0.02"/>
             </geometry>
             <material name="yellow"/>
         </visual>
         <collision>
             <geometry>
-                <box size="0.12 0.01 0.02"/>
+                <box size="0.32 0.01 0.02"/>
             </geometry>
             <material name="yellow"/>
         </collision>
@@ -81,14 +81,14 @@
             <geometry>
                 <box size="0.05 0.01 0.02"/>
             </geometry>
-            <origin rpy="0 0 1.57" xyz="-0.055 0.03 0"/>
+            <origin rpy="0 0 1.57" xyz="-0.155 0.03 0"/>
             <material name="red"/>
         </visual>
         <collision>
             <geometry>
                 <box size="0.05 0.01 0.02"/>
             </geometry>
-            <origin rpy="0 0 1.57" xyz="-0.055 0.03 0"/>
+            <origin rpy="0 0 1.57" xyz="-0.155 0.03 0"/>
         </collision>
         <contact>
             <lateral_friction value="1"/>
@@ -97,7 +97,7 @@
     <joint name="left_joint" type="prismatic">
         <parent link="base_link"/>
         <child link="left_jaw"/>
-        <limit effort="1000.0" lower="0" upper="0.05"/>
+        <limit effort="1000.0" lower="0" upper="0.15"/>
     </joint>
 
     <link name="right_jaw">
@@ -105,14 +105,14 @@
             <geometry>
                 <box size="0.05 0.01 0.02"/>
             </geometry>
-            <origin rpy="0 0 1.57" xyz="0.055 0.03 0"/>
+            <origin rpy="0 0 1.57" xyz="0.155 0.03 0"/>
             <material name="green"/>
         </visual>
         <collision>
             <geometry>
                 <box size="0.05 0.01 0.02"/>
             </geometry>
-            <origin rpy="0 0 1.57" xyz="0.055 0.03 0"/>
+            <origin rpy="0 0 1.57" xyz="0.155 0.03 0"/>
         </collision>
         <contact>
             <lateral_friction value="1"/>
@@ -121,7 +121,7 @@
     <joint name="right_joint" type="prismatic">
         <parent link="base_link"/>
         <child link="right_jaw"/>
-        <limit effort="1000.0" lower="0" upper="0.05"/>
+        <limit effort="1000.0" lower="0" upper="0.15"/>
         <axis xyz="-1 0 0"/>
     </joint>
 </robot>
