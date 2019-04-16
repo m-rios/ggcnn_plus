@@ -25,7 +25,6 @@ Car
 Cassette
 Coaster
 Coin
-Computer Desktop, Laptop
 ComputerMouse
 Controller
 DecorativeAccessory

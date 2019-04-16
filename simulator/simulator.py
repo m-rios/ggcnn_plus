@@ -9,7 +9,7 @@ import time
 import math
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
-from wavefront import Obj
+from utils import Wavefront
 
 red = [1,0,0]
 green = [0,1,0]
@@ -311,7 +311,7 @@ class Simulator:
                     performance of your simulation''').format(visual_fn)
             collision_fn = visual_fn
 
-        obj = Obj(visual_fn)
+        obj = Wavefront(visual_fn)
         size = obj.size
         max_size = size.max()
         scale = np.clip(max_size, 0.08, 0.9)/max_size * scale
@@ -374,7 +374,7 @@ class Simulator:
 
         scale = np.repeat(scale, 3).astype(np.float)
 
-        obj = Obj(visual_fn)
+        obj = Wavefront(visual_fn)
         size = obj.size * scale
         max_dim = np.argmax(size)
         new_scale = np.clip(size[max_dim], 0.08, 0.9)/size[max_dim]
@@ -610,6 +610,44 @@ class Simulator:
                     targetPosition=width/2., maxVelocity=1)
         self.run(epochs=int(0.1/self.timestep))
 
+    def move_test(self, pose, pos_tol=0.01, ang_tol=2):
+        reaction_forces = []
+        zs = []
+        ts = []
+        try:
+            ang_tol = ang_tol*np.pi/180.
+            pose[2] += 0.02
+            for joint in range(3):
+                p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                        targetPosition=pose[joint], maxVelocity=0.5)
+            for joint in [3, 4, 5]:
+                p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                        targetPosition=pose[joint], maxVelocity=0.8)
+            p.enableJointForceTorqueSensor(self.gid, 0)
+            for _ in range(int(self.timeout/self.timestep)):
+                state = p.getLinkState(self.gid, 5)
+                jstate = p.getJointState(self.gid, 0)
+                reaction_forces.append(jstate[2][0:3])
+                ts.append(jstate[3])
+                pos = np.array(state[0])
+                zs.append(pos[2])
+                ori = np.array(p.getEulerFromQuaternion(state[1]))
+                ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
+                #print('Offset {} {}'.format(pose[0:3] - pos,
+                #    pose[3:6] - ori))
+                if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
+                    print('Arrived within tolerance')
+                    break
+                self.step()
+            else:
+                print('Move timed out')
+        except KeyboardInterrupt:
+            print 'Cancel move'
+            return reaction_forces, zs, ts
+        if self.debug:
+            self.cam.snap()
+        return reaction_forces, zs, ts
+
     def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2):
         try:
             ang_tol = ang_tol*np.pi/180.
@@ -620,7 +658,6 @@ class Simulator:
             for joint in [3, 4, 5]:
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                         targetPosition=pose[joint], maxVelocity=15)
-
             for _ in range(int(self.timeout/self.timestep)):
                 state = p.getLinkState(self.gid, 5)
                 pos = np.array(state[0])
