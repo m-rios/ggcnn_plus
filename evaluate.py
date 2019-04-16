@@ -23,7 +23,7 @@ from simulator.simulator import Simulator, VIDEO_LOGGER, STATE_LOGGER
 import network as net
 
 SCENES_PATH = os.environ['GGCNN_SCENES_PATH']
-SHAPENET_PATH = os.environ['SHAPENET_PATH']
+MODELS_PATH = os.environ['MODELS_PATH']
 
 
 if __name__ == '__main__':
@@ -32,6 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('model', help='path to the root directory of a model')
     parser.add_argument('--grasps', default=1, help='Number of grasps predicted per image')
     parser.add_argument('--results_path', default=os.environ['RESULTS_PATH'], help='Path to simulation log files')
+    parser.add_argument('--logvideo', action='store_true')
     parser.add_argument('--gui', action='store_true')
     parser.add_argument('-e', nargs='+', default=None, type=int, help='epochs to evaluate, if next arg is model, separate with -- ')
 
@@ -87,7 +88,7 @@ if __name__ == '__main__':
         # Test results for each scene
         for scene_idx, scene_fn in enumerate(scene_fns):
             scene_name = scene_fn.split('/')[-1].split('.')[-2].split('_')[-2]
-            sim.restore(scene_fn, SHAPENET_PATH)
+            sim.restore(scene_fn, MODELS_PATH)
 
             if not args.gui:
                 fn = os.path.join(output_path, scene_name +'.png')
@@ -103,9 +104,11 @@ if __name__ == '__main__':
                 pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, depth[scene_idx][gs.center])
                 pose = np.concatenate((pose, [0, 0, gs.angle]))
 
-                sim.start_log(sim_log_path + '/'+scene_name+'.mp4', VIDEO_LOGGER, rate=25)
+                if args.logvideo:
+                    sim.start_log(sim_log_path + '/'+scene_name+'.mp4', VIDEO_LOGGER, rate=25)
                 result = sim.evaluate_grasp(pose, grasp_width)
-                sim.stop_log()
+                if args.logvideo:
+                    sim.stop_log()
             else:
                 result = False
 
@@ -115,6 +118,7 @@ if __name__ == '__main__':
 
         success = float(results)/float(len(scene_fns))
         results_f.write('Epoch {}: {}%\n'.format(epoch, success))
+        results_f.flush()
         failures.close()
 
 

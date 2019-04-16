@@ -20,28 +20,25 @@ VIDEO_LOGGER = 0
 STATE_LOGGER = 1
 
 class VideoLogger(object):
-    def __init__(self, log_fn, timestep, rate=2.0, size=(300, 300), pos=[0, -.7, 2.]):
+    def __init__(self, log_fn, timestep, rate=2.0, shape=(900, 900), pos=[0, -.7, 2.]):
         codec = cv2.VideoWriter_fourcc(*'MJPG')
         self.video = skvideo.io.FFmpegWriter(log_fn)
-        #self.video2 = cv2.VideoWriter(log_fn, codec, 25., size)
         self.rate = rate
         self.fn = log_fn
-        self.cam = Camera(width=size[0], height=size[1], pos=pos)
+        self.cam = Camera(width=shape[0], height=shape[1], pos=pos)
         self.timestep = timestep
         self.epoch = 0
-        self.buffer = np.zeros((1, 300, 300, 3), dtype=np.uint8)
+        self.buffer = np.zeros((1, shape[0], shape[1], 3), dtype=np.uint8)
+        self.shape = shape
 
     def log(self):
         if self.epoch % (1./self.timestep//self.rate) == 0:
             rgb = self.cam.snap()[0]
-            rgb = rgb[:,:,0:3].astype(np.uint8).reshape(1,300,300,3)
-            #self.buffer = np.append(self.buffer, rgb, axis=0)
+            rgb = rgb[:,:,0:3].astype(np.uint8).reshape(1,self.shape[0],self.shape[1],3)
             self.video.writeFrame(rgb)
-            #self.video2.write(rgb)
         self.epoch += 1
 
     def close(self):
-        #skvideo.io.vwrite(self.fn, self.buffer)
         self.video.close()
 
 class StateLogger(object):
@@ -325,7 +322,7 @@ class Simulator:
         ori = p.getQuaternionFromEuler(ori)
 
         vid = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
-                rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=[scale]*3,
+                rgbaColor=[0.1,0.1,1,1], specularColor=[0.4,.4,0], meshScale=[scale]*3,
                 visualFramePosition=-center)
         cid = p.createCollisionShape(shapeType=p.GEOM_MESH,
                 fileName=collision_fn, meshScale=[scale]*3,

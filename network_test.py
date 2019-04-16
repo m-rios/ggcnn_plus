@@ -1,7 +1,7 @@
 from keras.models import load_model
 from skimage.filters import gaussian
 from ggcnn.dataset_processing.grasp import detect_grasps, BoundingBoxes
-from simulator.simulator import Simulator
+from simulator.simulator import Simulator, VIDEO_LOGGER
 import matplotlib.pyplot as plt
 import numpy as np
 import network as net
@@ -27,11 +27,11 @@ if not args.gui:
 
 gs = net.get_grasps_from_output(position, angle, width, 1)[0]
 # Send grasp to simulator and evaluate
-print 'Pixels: ' + str(gs.center)
 pose, width = sim.cam.compute_grasp(gs.as_bb.points, depth[0][gs.center])
-print 'Width: ' + str(width)
-print 'Pose: ' + str(pose)
+print pose, width, gs.angle
 pose = np.concatenate((pose, [0, 0, gs.angle]))
+sim.start_log('/home/mario/Developer/msc-thesis/videolog.mp4', VIDEO_LOGGER)
 result = sim.evaluate_grasp(pose, width)
+sim.stop_log()
 
 
