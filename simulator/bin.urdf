@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<robot name="bin">
+
+    <material name="green">
+        <color rgba="0 0.8 0 1"/>
+    </material>
+
+    <link name="base_link">
+        <visual>
+            <geometry>
+                <box size="1 1 0.01"/>
+            </geometry>
+            <material name="green"/>
+        </visual>
+        <visual>
+            <origin xyz="0 0.5 0.1"/>
+            <geometry>
+                <box size="1 0.01 0.2"/>
+            </geometry>
+            <material name="green"/>
+        </visual>
+        <visual>
+            <origin xyz="0 -0.5 0.1"/>
+            <geometry>
+                <box size="1 0.01 0.2"/>
+            </geometry>
+            <material name="green"/>
+        </visual>
+        <visual>
+            <origin xyz="0.5 0 0.1"/>
+            <geometry>
+                <box size="0.01 1 0.2"/>
+            </geometry>
+            <material name="green"/>
+        </visual>
+        <visual>
+            <origin xyz="-0.5 0 0.1"/>
+            <geometry>
+                <box size="0.01 1 0.2"/>
+            </geometry>
+            <material name="green"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="1 1 0.01"/>
+            </geometry>
+            <material name="green"/>
+        </collision>
+        <collision>
+            <origin xyz="0 0.5 0.1"/>
+            <geometry>
+                <box size="1 0.01 0.2"/>
+            </geometry>
+            <material name="green"/>
+        </collision>
+        <collision>
+            <origin xyz="0 -0.5 0.1"/>
+            <geometry>
+                <box size="1 0.01 0.2"/>
+            </geometry>
+            <material name="green"/>
+        </collision>
+        <collision>
+            <origin xyz="0.5 0 0.1"/>
+            <geometry>
+                <box size="0.01 1 0.2"/>
+            </geometry>
+            <material name="green"/>
+        </collision>
+        <collision>
+            <origin xyz="-0.5 0 0.1"/>
+            <geometry>
+                <box size="0.01 1 0.2"/>
+            </geometry>
+            <material name="green"/>
+        </collision>
+    </link>
+</robot>

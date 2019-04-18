@@ -18,6 +18,8 @@ black = [0,0,0]
 
 VIDEO_LOGGER = 0
 STATE_LOGGER = 1
+OPENGL_LOGGER = 2
+MODULE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 class VideoLogger(object):
     def __init__(self, log_fn, timestep, rate=2.0, shape=(900, 900), pos=[0, -.7, 2.]):
@@ -42,7 +44,7 @@ class VideoLogger(object):
         self.video.close()
 
 class StateLogger(object):
-    def __init__(self, log_fn, timestep, rate=2.0):
+    def __init__(self, log_fn):
         self.log_fn = log_fn
 
     def log(self):
@@ -50,6 +52,20 @@ class StateLogger(object):
 
     def close(self):
         p.stopLogging()
+
+class OpenGLLogger(object):
+    """
+        NOTE: IMPRACTICALLY SLOW, DO NO USE
+    """
+    def __init__(self, log_fn):
+        self.log_fn = log_fn
+
+    def log(self):
+        log = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, self.log_fn)
+
+    def close(self):
+        p.stopLogging()
+
 
 class Camera(object):
 
@@ -276,20 +292,9 @@ class Simulator:
 
         return bid
 
-    def obj_center(self, obj_fn):
-        vertices = []
-        with open(obj_fn, 'r') as f:
-            for line in f.readlines():
-                fields = line.split(' ')
-                if fields[0] == 'v':
-                    vertices.append([float(x) for x in fields[1:4]])
-
-        vertices = np.array(vertices)
-        return vertices.mean(axis=0)
-
     def read_scale(self, obj_id):
         try:
-            scales = pd.read_csv('/home/mario/Developer/msc-thesis/simulator/scales.csv')
+            scales = pd.read_csv(MODULEPATH + '/scales.csv')
             scales.set_index('obj_id', inplace=True)
             return scales.loc[obj_id].scale
         except Exception as e:
@@ -311,7 +316,7 @@ class Simulator:
         obj = Wavefront(visual_fn)
         size = obj.size
         max_size = size.max()
-        scale = np.clip(max_size, 0.08, 0.9)/max_size * scale
+        #scale = np.clip(max_size, 0.08, 0.9)/max_size * scale
         center = obj.center * scale
 
         if pos is None:
@@ -334,78 +339,6 @@ class Simulator:
 
         return bid
 
-    def _load_obj(self, fn, pos, ori):
-        visual_fn = fn
-        collision_fn = fn.split('.')[-2] + '_vhacd.obj'
-        visual_fn = collision_fn # Temporary fix until precise vhacd decomposition achieved
-        obj_id = fn.split('/')[-1].split('.')[-2]
-
-        if not os.path.exists(collision_fn):
-            print('''No collision model for {} was found. Falling back to
-                    visual model as collision geometry. This might impact
-                    performance of your simulation''').format(visual_fn)
-            collision_fn = visual_fn
-
-        root = '/'.join(fn.split('/')[:-1])
-
-        metadata_fn = os.path.join(root, 'metadata.csv')
-
-        scale = 1
-        #mass = 1
-
-        if os.path.isfile(metadata_fn):
-            csv = pd.read_csv(metadata_fn).set_index(u'fullId')
-            ids = csv.index
-            wss_id = u'wss.'+obj_id
-
-            id_found = wss_id in ids
-
-            if id_found:
-                scale = csv.loc[wss_id][u'unit']
-                # Check if NaN (due to missing value)
-                if scale != scale:
-                    scale = 1
-                #mass = csv.loc[wss_id][u'weight']
-                #if mass != mass:
-                #    mass = 1
-
-        scale = np.repeat(scale, 3).astype(np.float)
-
-        obj = Wavefront(visual_fn)
-        size = obj.size * scale
-        max_dim = np.argmax(size)
-        new_scale = np.clip(size[max_dim], 0.08, 0.9)/size[max_dim]
-        size *= new_scale
-        scale *= np.repeat(new_scale, 3)
-        center = self.obj_center(visual_fn)
-        center *= scale
-
-        import ipdb; ipdb.set_trace() # BREAKPOINT
-        if pos is None:
-            start_pos = np.zeros((3,))
-            start_pos[2] = np.max(size)
-        else:
-            start_pos = pos
-
-        if ori is None:
-            start_ori = np.random.uniform(0, 2*np.pi, (3,)).tolist()
-            start_ori = [0, 0, 0]
-            start_ori = p.getQuaternionFromEuler(start_ori)
-        else:
-            start_ori = p.getQuaternionFromEuler(ori)
-
-        vId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
-                rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], meshScale=scale,
-                visualFramePosition=-center)
-        cId = p.createCollisionShape(shapeType=p.GEOM_MESH,
-                fileName=collision_fn, meshScale=scale,
-                collisionFramePosition=-center)
-        bId =  p.createMultiBody(baseMass=size[max_dim],baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cId, baseVisualShapeIndex = vId, basePosition=start_pos, baseOrientation=start_ori)
-        if self.debug:
-            self.drawFrame([0,0,0], bId)
-
-        return bId
-
     def transform(self, bid, position=None, rotation=None, scale=None):
         if position is not None:
             _, ori = self._get_pose(bid)
@@ -417,7 +350,7 @@ class Simulator:
 
     def replay(self, log_fn, scene_fn):
         self.restore(scene_fn, os.environ['SHAPENET_PATH'])
-        self.add_gripper('/Users/mario/Developer/msc-thesis/simulator/gripper.urdf')
+        self.add_gripper(MODULE_PATH + '/gripper.urdf')
         log = self._read_logfile(log_fn, verbose=False)
         video_fn = log_fn.replace('.log', '.mp4')
         video = cv2.VideoWriter(video_fn, 0, 25, (300, 300))
@@ -486,13 +419,13 @@ class Simulator:
 
     def evaluate_grasp(self, pose, width):
         if not self.gid:
-            self.add_gripper('simulator/gripper.urdf')
+            self.add_gripper(MODULE_PATH + '/gripper.urdf')
         else:
             for jid in [0,1,3,4,5]:
                 p.resetJointState(self.gid, jid, 0)
             p.resetJointState(self.gid, 2, 1)
-        #if not self.bin:
-        #    self.bin = p.loadURDF('simulator/bin.urdf', basePosition=self.bin_pos)
+        if not self.bin:
+            self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
         self.open_gripper()
         # Move to pregrasp
         self.move_gripper_to(pose + np.array([0, 0, 0.1, 0, 0, 0]))
@@ -502,11 +435,16 @@ class Simulator:
         self.close_gripper()
         # Move to postgrasp
         #self.move_gripper_to(pose + np.array([0, 0, 1.5, 0, 0, 0]))
-        self.move_gripper_to(np.array([0, 0, 1.5, 0, 0, 0]))
+        post_grasp = np.array([self.bin_pos[0], self.bin_pos[1], self.bin_pos[2] + 1.5, 0, 0, 0])
+        self.move_gripper_to(post_grasp)
+        self.open_gripper()
+        self.run(epochs=int(3./self.timestep))
         bid = self.bodies.next()
         final_pos,_ = p.getBasePositionAndOrientation(bid)
         print('Final pos: ', final_pos)
-        return np.abs(final_pos[2] - 1.5) < 0.5
+        result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 0.5
+        print('Result: {}'.format(result))
+        return result
 
 
     def _remove_body(self, bId):
@@ -534,14 +472,14 @@ class Simulator:
             along with a bullet file with the dynamic state of each object
         """
         with open(fn, mode='w') as csv:
-            csv.write('obj_id,x,y,z,a,b,g\n')
+            csv.write('obj_id,x,y,z,r,p,y,scale\n')
             for bid in self.bodies:
                 obj_id = self.obj_ids[bid]
                 pos, ori = p.getBasePositionAndOrientation(bid)
                 ori = p.getEulerFromQuaternion(ori)
-                obj_str = ','.join([obj_id] + [str(ps) for ps in pos] + [ str(o) for o in ori]) + '\n'
+                sc = self.get_object_scale(bid)
+                obj_str = ','.join([obj_id] + [str(ps) for ps in pos] + [ str(o) for o in ori] + [str(sc)]) + '\n'
                 csv.write(obj_str)
-        #p.saveBullet(fn.split('.')[-2] + '.bullet')
 
     def restore(self, fn, path):
         """
@@ -560,13 +498,11 @@ class Simulator:
                 obj_fn = os.path.join(path, fields[0] + '.obj')
                 obj_pos = [float(fields[1]),float(fields[2]),float(fields[3])]
                 obj_ori = [float(fields[4]),float(fields[5]),float(fields[6])]
-                scale = self.read_scale(fields[0])
+                scale = float(fields[7])
                 self.load(obj_fn, obj_pos, obj_ori, scale)
                 print('Loaded '+ obj_fn)
 
         self.cam.target = self.get_clutter_center().tolist()
-
-        #p.restoreState(fileName=fn.split('.')[-2] + '.bullet')
 
     def get_clutter_center(self):
         # Find the center of all the objects in the scene
@@ -577,6 +513,9 @@ class Simulator:
             pos += np.array(p.getBasePositionAndOrientation(bid)[0])
         pos /= nbodies
         return pos
+
+    def get_object_scale(self, bid):
+        return p.getVisualShapeData(bid)[0][3][0]
 
     def _update_pos(self):
         for id in self.bodies:
@@ -766,11 +705,13 @@ class Simulator:
             self.logger.log()
 
     def start_log(self, fn, logger=VIDEO_LOGGER, rate=25):
-        assert logger == VIDEO_LOGGER or logger == STATE_LOGGER
+        assert logger == VIDEO_LOGGER or logger == STATE_LOGGER or logger == OPENGL_LOGGER
         if logger == VIDEO_LOGGER:
             self.logger = VideoLogger(fn, self.timestep, rate)
         elif logger == STATE_LOGGER:
-            self.logger = StateLogger(fn, self.timestep, rate)
+            self.logger = StateLogger(fn)
+        elif logger == OPENGL_LOGGER:
+            self.logger = OpenGLLogger(fn)
 
     def stop_log(self):
         if self.logger is not None:

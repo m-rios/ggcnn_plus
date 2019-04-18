@@ -1,7 +1,9 @@
 import pandas as pd
+import glob
 import os
 from subprocess import Popen
 import numpy as np
+from random import shuffle
 
 VHACD_PATH = os.environ['VHACD_PATH']
 VHACD_LOG_FILE = '/tmp/vhacd.log'
@@ -66,19 +68,19 @@ class Graspable(object):
     def __init__(self, shapenet_path, output_path, categories_fn, nobjs=None):
 
         self.shapenet_path = shapenet_path
-        self.output_path = outputpath
+        self.output_path = output_path
         self.categories_fn = categories_fn
         self.nobjs = nobjs
 
         self.metadata = pd.read_csv(os.path.join(self.shapenet_path, 'metadata.csv'))
 
-        with open('categories.txt', 'r') as f:
+        with open(categories_fn, 'r') as f:
             categories = f.readlines()
             categories = [subcat.replace('#','').replace(',','').replace('\n','') for cat in categories for subcat in cat.split(' ') ]
             categories = [cat for cat in categories if cat is not '']
             categories = set(categories)
 
-        graspable = metadata.loc[ [ len(set(str(x).split(',')).intersection(categories)) > 0 for x in shpn['category']] ]
+        graspable = self.metadata.loc[ [ len(set(str(x).split(',')).intersection(categories)) > 0 for x in self.metadata['category']] ]
         self.ids = [x.replace('wss.', '') for x in graspable['fullId']]
         shuffle(self.ids)
         self.ids = self.ids[:self.nobjs]
@@ -101,6 +103,15 @@ class Graspable(object):
             obj_fn = os.path.join(self.shapenet_path, idx + '.obj')
             vhacd_fn = os.path.join(to_path, idx + '_vhacd.obj')
             vhacd.run(obj_fn, vhacd_fn)
+
+    def convert_to_vhacd(self, from_path, to_path):
+        objs_fn = glob.glob(os.path.join(from_path, '*.obj'))
+        vhacd = VHACD()
+        for obj_fn in objs_fn:
+            idx = obj_fn.replace('.obj','')
+            vhacd_fn = os.path.join(to_path, idx + '_vhacd.obj')
+            vhacd.run(obj_fn, vhacd_fn)
+        pass
 
 class Wavefront(object):
 

@@ -4,8 +4,8 @@ import os
 import glob
 
 parser = argparse.ArgumentParser()
-parser.add_argument('scenes_path')
-parser.add_argument('--objpath', default=os.environ['SHAPENET_PATH'])
+parser.add_argument('--scenes_path', default=os.environ['GGCNN_SCENES_PATH'])
+parser.add_argument('--objpath', default=os.environ['MODELS_PATH'])
 args = parser.parse_args()
 
 sim = Simulator(debug=True,timestep=1e-4, gui=True, g=-10)
