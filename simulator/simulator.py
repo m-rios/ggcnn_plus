@@ -22,12 +22,12 @@ OPENGL_LOGGER = 2
 MODULE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 class VideoLogger(object):
-    def __init__(self, log_fn, timestep, rate=2.0, shape=(900, 900), pos=[0, -.7, 2.]):
+    def __init__(self, log_fn, timestep, rate=2.0, shape=(900, 900), pos=[-0.75, -0.75, 2]):
         codec = cv2.VideoWriter_fourcc(*'MJPG')
         self.video = skvideo.io.FFmpegWriter(log_fn)
         self.rate = rate
         self.fn = log_fn
-        self.cam = Camera(width=shape[0], height=shape[1], pos=pos)
+        self.cam = Camera(width=shape[0], height=shape[1], pos=pos, target=[0.5, 0.5,0], far=6,up=[1., 1., 0.], fov=60)
         self.timestep = timestep
         self.epoch = 0
         self.buffer = np.zeros((1, shape[0], shape[1], 3), dtype=np.uint8)
@@ -69,13 +69,14 @@ class OpenGLLogger(object):
 
 class Camera(object):
 
-    def __init__(self, width=300, height=300, fov=40, pos=[0, 0, 1.5], target=np.zeros(3,), debug=False):
+    def __init__(self, width=300, height=300, fov=40, pos=[0, 0, 1.5],
+            target=np.zeros(3,),far=5, near=0.1, up=[0., 1., 0],  debug=False):
         self._width = width
         self._height = height
         self._target = target
-        self._near = 0.1
-        self._far =  5
-        self._up = [0., 1., 0.]
+        self._near = near
+        self._far =  far
+        self._up = up
         self._pos = pos
         self.debug = debug
         self._view = None
@@ -93,22 +94,6 @@ class Camera(object):
                 point /= np.linalg.norm(point)
                 depth[v,u] /= np.dot(normal, point)
         return cos
-
-    def snap2(self):
-        _, _, rgb, depth, _ = p.getCameraImage(self._width, self._height, self._view, self._projection)
-        depth = self._far * self._near / (self._far - (self._far - self._near) * depth)
-        rgb = rgb.astype(np.uint8)
-        pos = np.array(self._pos)
-        normal = np.array(self._target) - pos
-        normal /= np.linalg.norm(normal)
-        for u in range(self.width):
-            for v in range(self.height):
-                pixel = np.array([2.*u/self.width - 1, 2.*v/self.height - 1, -1., 1])
-                point = np.dot(self._reproject, pixel)[0:3] - pos
-                point /= np.linalg.norm(point)
-                depth[v,u] /= np.dot(normal, point)
-
-        return rgb, depth
 
     def snap(self, segmentation=False):
         _, _, rgb, depth, mask = p.getCameraImage(self._width, self._height, self._view, self._projection)
@@ -237,7 +222,7 @@ class Camera(object):
 
 class Simulator:
 
-    def __init__(self, gui=False, timeout=4, timestep=1e-4, debug=False,
+    def __init__(self, gui=False, timeout=2, timestep=1e-4, debug=False,
             epochs=10000, stop_th=1e-6, g=-10, bin_pos=[1.5, 1.5, 0.01]):
         self.gui = gui
         self.debug = debug
@@ -435,10 +420,11 @@ class Simulator:
         self.close_gripper()
         # Move to postgrasp
         #self.move_gripper_to(pose + np.array([0, 0, 1.5, 0, 0, 0]))
-        post_grasp = np.array([self.bin_pos[0], self.bin_pos[1], self.bin_pos[2] + 1.5, 0, 0, 0])
+        post_grasp = np.array([self.bin_pos[0], self.bin_pos[1], self.bin_pos[2] + 0.75, 0, 0, 0])
         self.move_gripper_to(post_grasp)
+        self.run(epochs=int(0.5/self.timestep))
         self.open_gripper()
-        self.run(epochs=int(3./self.timestep))
+        self.run(epochs=int(1./self.timestep))
         bid = self.bodies.next()
         final_pos,_ = p.getBasePositionAndOrientation(bid)
         print('Final pos: ', final_pos)

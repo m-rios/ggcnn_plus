@@ -1,5 +1,6 @@
 import glob
 import os
+import simulator as s
 from simulator import Simulator
 from time import sleep
 import numpy as np
@@ -8,8 +9,14 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    #GUI = True
-    #sim = Simulator(gui=GUI, g=-10, debug=False, epochs=240)
+    GUI = False
+    sim = Simulator(gui=GUI, g=-10, debug=False, epochs=240)
+    sim.restore( '/home/mario/DATA/scenes/0_136ef91c95ca5c2d4b9a4e1a888c5f59_scene.csv', os.environ['MODELS_PATH'])
+    cam = s.Camera(width=900, height=900,pos=[-0.75, -0.75, 2],target=[0.5, 0.5,0], far=6,up=[1., 1., 0.], fov=60)
+    rgb,depth = cam.snap()
+    plt.imshow(rgb)
+    plt.show()
+    exit()
     #sim.load('cube_small.urdf', pos=[0.2, 0.5,0.025])
     #sim.cam.target = [0.2, 0.5, 0.0]
     #sim.cam.project(sim.cam.target)
