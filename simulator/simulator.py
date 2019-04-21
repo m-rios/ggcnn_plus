@@ -420,8 +420,8 @@ class Simulator:
 
         #Post and pregrasp poses
         pregrasp = pose + [0, 0, .5, 0, 0, 0]
-        postgrasp = p.getBasePositionAndOrientation(self.bin)
-        postgrasp = np.array(postgrasp[0] + postgrasp[1])
+        postgrasp = np.array(p.getBasePositionAndOrientation(self.bin)[0])
+        postgrasp = np.concatenate((postgrasp, pose[3:6]))
         postgrasp[2] += 0.75
         bid = self.bodies.next()
         # Move to pregrasp
@@ -430,7 +430,6 @@ class Simulator:
         # Move to grasp
         self.move_gripper_to(pose)
         self.close_gripper()
-        self.set_gripper_width(0, vel=1) # This is intended to firmly grasp the object
         # Take offset between object's COM and gripper to compute postgrasp
         gripper_pos = np.array(p.getLinkState(self.gid, 5)[0])
         object_pos = p.getBasePositionAndOrientation(bid)[0]
@@ -624,7 +623,7 @@ class Simulator:
         timeout = max_dist/linvel
         try:
             ang_tol = ang_tol*np.pi/180.
-            pose[2] += 0.02
+            pose[2] += 0.005
             # Linear joinst
             for joint in range(3):
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
