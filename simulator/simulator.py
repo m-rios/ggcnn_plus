@@ -10,6 +10,9 @@ import math
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
 from utils import Wavefront
+import pkgutil
+from gripper import Gripper
+egl = pkgutil.get_loader('eglRenderer')
 
 red = [1,0,0]
 green = [0,1,0]
@@ -222,7 +225,7 @@ class Camera(object):
 
 class Simulator:
 
-    def __init__(self, gui=False, timeout=2, timestep=1e-4, debug=False,
+    def __init__(self, gui=False, use_egl=True, timeout=2, timestep=1e-4, debug=False,
             epochs=10000, stop_th=1e-6, g=-10, bin_pos=[1.5, 1.5, 0.01]):
         self.gui = gui
         self.debug = debug
@@ -234,11 +237,14 @@ class Simulator:
         self.bin_pos = bin_pos
 
         if gui:
-            mode = p.GUI
+            self.client = p.connect(p.GUI)
         else:
-            mode = p.DIRECT
+            self.client = p.connect(p.DIRECT)
+            if use_egl:
+                plugin = p.loadPlugin(egl.get_filename(), "_eglRendererPlugin")
+                p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
+                p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
 
-        self.client = p.connect(mode)
         p.setTimeStep(self.timestep)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         #p.setPhysicsEngineParameter(erp=0.4, contactERP=0.4, frictionERP=0.4)
@@ -272,14 +278,14 @@ class Simulator:
             bid = self.load_scale(fn, pos, ori, scale)
 
 
-        self.old_poses[bid] = self._get_pose(bid)
+        self.old_poses[bid] = self._get_pos_and_ori(bid)
         self.obj_ids[bid] = fn.split('/')[-1].split('.')[-2]
 
         return bid
 
     def read_scale(self, obj_id):
         try:
-            scales = pd.read_csv(MODULEPATH + '/scales.csv')
+            scales = pd.read_csv(MODULE_PATH + '/scales.csv')
             scales.set_index('obj_id', inplace=True)
             return scales.loc[obj_id].scale
         except Exception as e:
@@ -326,10 +332,10 @@ class Simulator:
 
     def transform(self, bid, position=None, rotation=None, scale=None):
         if position is not None:
-            _, ori = self._get_pose(bid)
+            _, ori = self._get_pos_and_ori(bid)
             p.resetBasePositionAndOrientation(bid,position, ori)
         if rotation is not None:
-            pos,_ = self._get_pose(bid)
+            pos,_ = self._get_pos_and_ori(bid)
             rot = p.getQuaternionFromEuler(rotation)
             p.resetBasePositionAndOrientation(bid,pos, rot)
 
@@ -411,27 +417,74 @@ class Simulator:
             p.resetJointState(self.gid, 2, 1)
         if not self.bin:
             self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
-        self.open_gripper()
+
+        #Post and pregrasp poses
+        pregrasp = pose + [0, 0, .5, 0, 0, 0]
+        postgrasp = p.getBasePositionAndOrientation(self.bin)
+        postgrasp = np.array(postgrasp[0] + postgrasp[1])
+        postgrasp[2] += 0.75
+        bid = self.bodies.next()
         # Move to pregrasp
-        self.move_gripper_to(pose + np.array([0, 0, 0.1, 0, 0, 0]))
         self.set_gripper_width(width)
+        self.move_gripper_to(pregrasp)
         # Move to grasp
         self.move_gripper_to(pose)
         self.close_gripper()
+        self.set_gripper_width(0, vel=1) # This is intended to firmly grasp the object
+        # Take offset between object's COM and gripper to compute postgrasp
+        gripper_pos = np.array(p.getLinkState(self.gid, 5)[0])
+        object_pos = p.getBasePositionAndOrientation(bid)[0]
+        offset = gripper_pos[:2] - object_pos[:2]
+        postgrasp[:2] += offset
         # Move to postgrasp
         #self.move_gripper_to(pose + np.array([0, 0, 1.5, 0, 0, 0]))
-        post_grasp = np.array([self.bin_pos[0], self.bin_pos[1], self.bin_pos[2] + 0.75, 0, 0, 0])
-        self.move_gripper_to(post_grasp)
-        self.run(epochs=int(0.5/self.timestep))
+        self.move_gripper_to(postgrasp)
+        self.run(epochs=int(0.5/self.timestep)) # Let inertia die at dropoff point. This prevents object shooting out
         self.open_gripper()
-        self.run(epochs=int(1./self.timestep))
-        bid = self.bodies.next()
+        self.run(epochs=int(1./self.timestep)) # Let object fall
         final_pos,_ = p.getBasePositionAndOrientation(bid)
         print('Final pos: ', final_pos)
-        result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 0.5
+        result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 0.7
         print('Result: {}'.format(result))
         return result
 
+    def evaluate_grasp2(self, pose, width):
+        if self.gripper is None:
+            self.gripper = Gripper()
+        else:
+            self.gripper.reset()
+        if not self.bin:
+            self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
+
+        #Post and pregrasp poses
+        pregrasp = pose + [0, 0, .5, 0, 0, 0]
+        postgrasp = p.getBasePositionAndOrientation(self.bin)
+        postgrasp = np.array(postgrasp[0] + postgrasp[1])
+        postgrasp[2] += 0.75
+        bid = self.bodies.next()
+        # Move to pregrasp
+        self.set_gripper_width(width)
+        self.move_gripper_to(pregrasp)
+        # Move to grasp
+        self.move_gripper_to(pose)
+        self.close_gripper()
+        self.set_gripper_width(0, vel=1) # This is intended to firmly grasp the object
+        # Take offset between object's COM and gripper to compute postgrasp
+        gripper_pos = np.array(p.getLinkState(self.gid, 5)[0])
+        object_pos = p.getBasePositionAndOrientation(bid)[0]
+        offset = gripper_pos[:2] - object_pos[:2]
+        postgrasp[:2] += offset
+        # Move to postgrasp
+        #self.move_gripper_to(pose + np.array([0, 0, 1.5, 0, 0, 0]))
+        self.move_gripper_to(postgrasp)
+        self.run(epochs=int(0.5/self.timestep)) # Let inertia die at dropoff point. This prevents object shooting out
+        self.open_gripper()
+        self.run(epochs=int(1./self.timestep)) # Let object fall
+        final_pos,_ = p.getBasePositionAndOrientation(bid)
+        print('Final pos: ', final_pos)
+        result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 0.7
+        print('Result: {}'.format(result))
+        return result
 
     def _remove_body(self, bId):
         del self.old_poses[bId]
@@ -445,7 +498,7 @@ class Simulator:
     def is_stable(self):
         for k, v in self.old_poses.iteritems():
             old_pos, old_ori = v
-            pos, ori = self._get_pose(k)
+            pos, ori = self._get_pos_and_ori(k)
             if not (np.linalg.norm(np.abs(pos - old_pos)) < self.stop_th and
                     np.linalg.norm(np.abs(ori - old_ori)) < self.stop_th):
                 return False
@@ -505,9 +558,9 @@ class Simulator:
 
     def _update_pos(self):
         for id in self.bodies:
-            self.old_poses[id] = self._get_pose(id)
+            self.old_poses[id] = self._get_pos_and_ori(id)
 
-    def _get_pose(self, bId):
+    def _get_pos_and_ori(self, bId):
         pos, ori = p.getBasePositionAndOrientation(bId)
         return np.array(pos), np.array(ori)
 
@@ -525,34 +578,31 @@ class Simulator:
     def open_gripper(self):
         self.set_gripper_width(0.3)
 
-    def set_gripper_width(self, width):
+    def set_gripper_width(self, width, vel=0.3, force=10000):
         width = 0.3 - width
         for joint in [6,7]:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                    targetPosition=width/2., maxVelocity=1)
-        self.run(epochs=int(0.1/self.timestep))
+                    targetPosition=width/2.,targetVelocity=0, maxVelocity=vel,
+                    force=force)
+        self.run(epochs=int(1/self.timestep))
 
-    def move_test(self, pose, pos_tol=0.01, ang_tol=2):
-        reaction_forces = []
-        zs = []
-        ts = []
+    def move_gripper_to_old(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.3, angvel=1):
+        max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
+        timeout = max_dist/linvel
         try:
             ang_tol = ang_tol*np.pi/180.
             pose[2] += 0.02
+            # Linear joinst
             for joint in range(3):
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                        targetPosition=pose[joint], maxVelocity=0.5)
+                        targetPosition=pose[joint], maxVelocity=linvel)
+            # Rotational joints
             for joint in [3, 4, 5]:
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                        targetPosition=pose[joint], maxVelocity=0.8)
-            p.enableJointForceTorqueSensor(self.gid, 0)
-            for _ in range(int(self.timeout/self.timestep)):
+                        targetPosition=pose[joint], maxVelocity=angvel)
+            for _ in range(int(timeout/self.timestep)):
                 state = p.getLinkState(self.gid, 5)
-                jstate = p.getJointState(self.gid, 0)
-                reaction_forces.append(jstate[2][0:3])
-                ts.append(jstate[3])
                 pos = np.array(state[0])
-                zs.append(pos[2])
                 ori = np.array(p.getEulerFromQuaternion(state[1]))
                 ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
                 #print('Offset {} {}'.format(pose[0:3] - pos,
@@ -565,22 +615,27 @@ class Simulator:
                 print('Move timed out')
         except KeyboardInterrupt:
             print 'Cancel move'
-            return reaction_forces, zs, ts
+            return
         if self.debug:
             self.cam.snap()
-        return reaction_forces, zs, ts
 
-    def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2):
+    def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.3, angvel=1, force=1000):
+        max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
+        timeout = max_dist/linvel
         try:
             ang_tol = ang_tol*np.pi/180.
             pose[2] += 0.02
+            # Linear joinst
             for joint in range(3):
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                        targetPosition=pose[joint], maxVelocity=2)
+                        targetPosition=pose[joint], targetVelocity=0,
+                        force=force, maxVelocity=linvel, positionGain=0.3, velocityGain=1)
+            # Rotational joints
             for joint in [3, 4, 5]:
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                        targetPosition=pose[joint], maxVelocity=15)
-            for _ in range(int(self.timeout/self.timestep)):
+                        targetPosition=pose[joint], targetVelocity=0, force=force,
+                        maxVelocity=angvel, positionGain=0.3, velocityGain=1)
+            for _ in range(int(timeout/self.timestep)):
                 state = p.getLinkState(self.gid, 5)
                 pos = np.array(state[0])
                 ori = np.array(p.getEulerFromQuaternion(state[1]))

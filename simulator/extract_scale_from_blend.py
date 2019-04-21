@@ -2,7 +2,7 @@ import bpy
 import glob
 import os
 
-BLENDER_SCENES_PATH='/run/media/mario/256D52764756BC25/blender scenes'
+BLENDER_SCENES_PATH='/home/mario/data/blender scenes'
 blender_fns = glob.glob(os.path.join(BLENDER_SCENES_PATH, '*.blend'))
 scales_f = open('/home/mario/Developer/msc-thesis/simulator/scales.csv','w')
 scales_f.write('obj_id,scale\n')

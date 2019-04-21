@@ -144,7 +144,7 @@ def get_grasps_from_output(position, angle, width, n_grasps=1):
     """
     position = gaussian(position.squeeze(), 5.0, preserve_range=True)
     angle = angle.squeeze()
-    width = width.squeeze()
+    width = gaussian(width.squeeze(), 1.0, preserve_range=True)
     gs = detect_grasps(position,
             angle,
             width_img=width,
@@ -196,7 +196,7 @@ class Network:
             flat_depth = depth.flatten() - depth.mean(axis=(1,2)).repeat(depth.shape[1]*depth.shape[2])
             depth = flat_depth.reshape(depth.shape)
 
-        model_output = self.model.predict(depth)
+        model_output = self.model.predict(depth, batch_size=24)
         position = model_output[0]
         angle = np.arctan2(model_output[2], model_output[1])/2.0
         width = model_output[3] * 150.

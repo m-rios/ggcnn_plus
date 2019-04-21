@@ -22,8 +22,6 @@ from ggcnn.dataset_processing.grasp import detect_grasps, BoundingBoxes
 from simulator.simulator import Simulator, VIDEO_LOGGER, STATE_LOGGER
 import network as net
 
-SCENES_PATH = os.environ['GGCNN_SCENES_PATH']
-MODELS_PATH = os.environ['MODELS_PATH']
 
 
 if __name__ == '__main__':
@@ -32,6 +30,8 @@ if __name__ == '__main__':
     parser.add_argument('model', help='path to the root directory of a model')
     parser.add_argument('--grasps', default=1, help='Number of grasps predicted per image')
     parser.add_argument('--results_path', default=os.environ['RESULTS_PATH'], help='Path to simulation log files')
+    parser.add_argument('--scenes', default=os.environ['GGCNN_SCENES_PATH'], help='Path to scene files location')
+    parser.add_argument('--models', default=os.environ['MODELS_PATH'], help='Path to obj files location')
     parser.add_argument('--logvideo', action='store_true')
     parser.add_argument('--gui', action='store_true')
     parser.add_argument('-e', nargs='+', default=None, type=int, help='epochs to evaluate, if next arg is model, separate with -- ')
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     sim.cam.height = height
     sim.cam.width = width
 
-    scene_fns = glob.glob(SCENES_PATH + '/*.csv')
+    scene_fns = glob.glob(args.scenes + '/*.csv')
 
     model_results_path = os.path.join(args.results_path, model_name)
     if not os.path.exists(model_results_path):
@@ -87,8 +87,8 @@ if __name__ == '__main__':
 
         # Test results for each scene
         for scene_idx, scene_fn in enumerate(scene_fns):
-            scene_name = scene_fn.split('/')[-1].split('.')[-2].split('_')[-2]
-            sim.restore(scene_fn, MODELS_PATH)
+            scene_name = '_'.join(scene_fn.split('/')[-1].split('.')[-2].split('_')[0:2])
+            sim.restore(scene_fn, args.models)
 
             if not args.gui:
                 fn = os.path.join(output_path, scene_name +'.png')

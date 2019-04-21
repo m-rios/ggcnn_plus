@@ -24,8 +24,8 @@ if __name__ == '__main__':
 
     assert(len(obj_fns) > 0)
     timestep = 1./240.
-    sim = Simulator(gui=args.gui, epochs=int(5/timestep), timestep=timestep,
-            stop_th=1e-6, debug=True)
+    sim = Simulator(gui=args.gui, use_egl=False, epochs=int(5/timestep), timestep=timestep,
+            stop_th=1e-6, debug=args.gui)
     sim.cam.width = args.width
     sim.cam.height = args.height
 

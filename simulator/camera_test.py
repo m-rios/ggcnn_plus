@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 if __name__ == '__main__':
     GUI = False
     sim = Simulator(gui=GUI, g=-10, debug=False, epochs=240)
-    sim.restore( '/home/mario/DATA/scenes/0_136ef91c95ca5c2d4b9a4e1a888c5f59_scene.csv', os.environ['MODELS_PATH'])
-    cam = s.Camera(width=900, height=900,pos=[-0.75, -0.75, 2],target=[0.5, 0.5,0], far=6,up=[1., 1., 0.], fov=60)
+    sim.restore( '/home/mario/data/scenes/0_136ef91c95ca5c2d4b9a4e1a888c5f59_scene.csv', os.environ['MODELS_PATH'])
+    cam = s.Camera(width=900, height=900,pos=[-0.75, -0.75, 1],target=[0.5, 0.5,0], far=6,up=[1., 1., 0.], fov=60)
     rgb,depth = cam.snap()
     plt.imshow(rgb)
     plt.show()
