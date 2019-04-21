@@ -22,6 +22,7 @@ parser.add_argument('--n_grasps', default=1, type=int, help='Number of grasps to
 parser.add_argument('--miniou', default=0.25, type=float, help='Min iou to consider successful')
 parser.add_argument('--saveviz', action='store_true', help='if true saves a visualization of network output')
 parser.add_argument('--epochs', nargs='+',default=None, type=int, help='epochs to evaluate')
+parser.add_argument('--max_scenes', default=None, type=int, help='Max number of scenes to compare with (Default uses all available)')
 args = parser.parse_args()
 
 model_fns = glob.glob(os.path.join(args.model, '*.hdf5'))
@@ -29,9 +30,9 @@ assert len(model_fns) > 0, 'No model files were found'
 model_name = model_fns[0].split('/')[-2]
 
 ds = h5py.File(args.dataset, 'r')
-scenes = ds['test']['img_id'][:]
-depth = ds['test']['depth_inpainted'][:]
-bbs = ds['test']['bounding_boxes'][:]
+scenes = ds['test']['img_id'][:args.max_scenes]
+depth = ds['test']['depth_inpainted'][:args.max_scenes]
+bbs = ds['test']['bounding_boxes'][:args.max_scenes]
 
 
 save_path = os.path.join(args.results, model_name, 'iou')
@@ -40,6 +41,9 @@ if not os.path.exists(save_path):
 
 results_fn = os.path.join(save_path, 'iou.txt')
 results_f = open(results_fn, 'w')
+
+results_f.write('Min IOU: {}\n'.format(args.miniou))
+results_f.write('Test dataset size: {}\n'.format(scenes.size() if args.max_scenes is None else args.max_scenes))
 
 for model_fn in model_fns:
     epoch = model_fn.split('_')[-2]
@@ -70,4 +74,5 @@ for model_fn in model_fns:
     sr = float(s)/float(s+f)
 
     results_f.write('Epoch {}: {}%\n'.format(epoch, sr))
+    results_f.flush()
 
