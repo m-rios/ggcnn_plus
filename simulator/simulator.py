@@ -758,3 +758,5 @@ class Simulator:
             self.logger.close()
             self.logger = None
 
+    def disconnect(self):
+        p.disconnect()

@@ -15,11 +15,12 @@ class Job:
 
 class Master():
     __metaclass__ = ABCMeta
-    def __init__(self, comm):
+    def __init__(self, comm, data=None):
         self.comm = comm
         self.status = MPI.Status()
         self.nworkers = comm.Get_size()
         self.jobs = []
+        self.data = data
         self.setup()
         super(Master, self).__init__()
 
@@ -41,9 +42,10 @@ class Master():
             del self.jobs[0]
         # Keep sending remaining jobs
         for job in self.jobs:
-            result = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=self.status)
+            result = self.comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=self.status)
             self.process_result(result)
-            comm.send(job, dest=self.status.Get_source(), tag=WORKTAG)
+            self.comm.send(job, dest=self.status.Get_source(), tag=WORKTAG)
+        print '***************************************************', 'waiting for jobs'
         # Wait for last jobs to finish
         for rank in range(1, self.nworkers):
             result = self.comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=self.status)
@@ -72,7 +74,7 @@ class Slave(object):
 if __name__ == '__main__':
     import random
     from time import sleep
-    class JobSimulatorEvaluation(Job):
+    class JobTest(Job):
         def run(self):
             sleep(0.5)
             return random.getrandbits(1)
@@ -84,7 +86,7 @@ if __name__ == '__main__':
 
         def setup(self):
             for _ in range(100):
-                self.jobs.append(JobSimulatorEvaluation())
+                self.jobs.append(JobTest())
 
         def process_result(self, result):
             self.results.append(result)

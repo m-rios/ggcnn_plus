@@ -14,11 +14,7 @@ import argparse
 import glob
 import os
 import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
 
-from skimage.filters import gaussian
-from ggcnn.dataset_processing.grasp import detect_grasps, BoundingBoxes
 from simulator.simulator import Simulator, VIDEO_LOGGER, STATE_LOGGER
 import network as net
 

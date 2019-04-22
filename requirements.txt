@@ -11,3 +11,4 @@ pandas
 pybullet
 mpldatacursor
 scikit-video
+mpi4py

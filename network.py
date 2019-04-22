@@ -153,6 +153,8 @@ def get_grasps_from_output(position, angle, width, n_grasps=1):
 
 class Network:
     def __init__(self, model_fn):
+        self.model_fn = model_fn
+        self.epoch = int(model_fn.split('_')[-2])
         self.model = load_model(model_fn)
 
     @property
