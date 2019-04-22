@@ -49,12 +49,13 @@ class VideoLogger(object):
 class StateLogger(object):
     def __init__(self, log_fn):
         self.log_fn = log_fn
+        self.logid = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, self.log_fn)
 
     def log(self):
-        log = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, self.log_fn)
+        pass
 
     def close(self):
-        p.stopLogging()
+        p.stopStateLogging(self.logid)
 
 class OpenGLLogger(object):
     """

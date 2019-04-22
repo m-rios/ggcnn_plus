@@ -48,9 +48,10 @@ class JobEv(mpi.Job):
 
             if self.args.logvideo:
                 sim.start_log(self.sim_log_path + '/'+scene_name+'.mp4', VIDEO_LOGGER, rate=25)
+            else:
+                sim.start_log(self.sim_log_path + '/'+scene_name+'.mp4', STATE_LOGGER)
             self.result = sim.evaluate_grasp(pose, grasp_width)
-            if self.args.logvideo:
-                sim.stop_log()
+            sim.stop_log()
         else:
             self.result = False
         sim.disconnect()
