@@ -9,9 +9,8 @@ import time
 import math
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
-from utils import Wavefront
+from utils import Wavefront, silence_stdout
 import pkgutil
-from gripper import Gripper
 egl = pkgutil.get_loader('eglRenderer')
 
 red = [1,0,0]
@@ -317,14 +316,14 @@ class Simulator:
         if ori is None:
             ori = [0, 0, 0]
         ori = p.getQuaternionFromEuler(ori)
-
-        vid = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
-                rgbaColor=[0.1,0.1,1,1], specularColor=[0.4,.4,0], meshScale=[scale]*3,
-                visualFramePosition=-center)
-        cid = p.createCollisionShape(shapeType=p.GEOM_MESH,
-                fileName=collision_fn, meshScale=[scale]*3,
-                collisionFramePosition=-center)
-        bid =  p.createMultiBody(baseMass=max_size*scale,baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cid, baseVisualShapeIndex = vid, basePosition=pos, baseOrientation=ori)
+        with silence_stdout():
+            vid = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
+                    rgbaColor=[0.1,0.1,1,1], specularColor=[0.4,.4,0], meshScale=[scale]*3,
+                    visualFramePosition=-center)
+            cid = p.createCollisionShape(shapeType=p.GEOM_MESH,
+                    fileName=collision_fn, meshScale=[scale]*3,
+                    collisionFramePosition=-center)
+            bid =  p.createMultiBody(baseMass=max_size*scale,baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cid, baseVisualShapeIndex = vid, basePosition=pos, baseOrientation=ori)
 
         if self.debug:
             self.drawFrame([0,0,0], bid)

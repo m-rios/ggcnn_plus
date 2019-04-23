@@ -1,5 +1,4 @@
 numpy==1.14.5
-tensorflow
 scipy
 Pillow
 scikit-image

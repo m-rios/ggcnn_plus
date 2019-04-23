@@ -1,9 +1,11 @@
 import pandas as pd
 import glob
 import os
+import sys
 from subprocess import Popen
 import numpy as np
 from random import shuffle
+from contextlib import contextmanager
 
 VHACD_PATH = os.environ['VHACD_PATH']
 VHACD_LOG_FILE = '/tmp/vhacd.log'
@@ -137,3 +139,14 @@ class Wavefront(object):
     def size(self):
         bb = self.aabb
         return np.abs(bb[1] - bb[0])
+
+@contextmanager
+def silence_stdout():
+    new_target = open(os.devnull, "w")
+    old_target = sys.stdout
+    sys.stdout = new_target
+    try:
+        yield new_target
+    finally:
+        sys.stdout = old_target
+
