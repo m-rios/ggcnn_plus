@@ -316,14 +316,14 @@ class Simulator:
         if ori is None:
             ori = [0, 0, 0]
         ori = p.getQuaternionFromEuler(ori)
-        with silence_stdout():
-            vid = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
-                    rgbaColor=[0.1,0.1,1,1], specularColor=[0.4,.4,0], meshScale=[scale]*3,
-                    visualFramePosition=-center)
-            cid = p.createCollisionShape(shapeType=p.GEOM_MESH,
-                    fileName=collision_fn, meshScale=[scale]*3,
-                    collisionFramePosition=-center)
-            bid =  p.createMultiBody(baseMass=max_size*scale,baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cid, baseVisualShapeIndex = vid, basePosition=pos, baseOrientation=ori)
+
+        vid = p.createVisualShape(shapeType=p.GEOM_MESH,fileName=visual_fn,
+                rgbaColor=[0.1,0.1,1,1], specularColor=[0.4,.4,0], meshScale=[scale]*3,
+                visualFramePosition=-center)
+        cid = p.createCollisionShape(shapeType=p.GEOM_MESH,
+                fileName=collision_fn, meshScale=[scale]*3,
+                collisionFramePosition=-center)
+        bid =  p.createMultiBody(baseMass=max_size*scale,baseInertialFramePosition=[0,0,0], baseCollisionShapeIndex=cid, baseVisualShapeIndex = vid, basePosition=pos, baseOrientation=ori)
 
         if self.debug:
             self.drawFrame([0,0,0], bid)
@@ -410,7 +410,8 @@ class Simulator:
 
     def evaluate_grasp(self, pose, width):
         if not self.gid:
-            self.add_gripper(MODULE_PATH + '/gripper.urdf')
+            #self.add_gripper(MODULE_PATH + '/gripper.urdf')
+            self.add_gripper(MODULE_PATH + '/gripper_wide.urdf')
         else:
             for jid in [0,1,3,4,5]:
                 p.resetJointState(self.gid, jid, 0)
@@ -448,6 +449,7 @@ class Simulator:
         return result
 
     def evaluate_grasp2(self, pose, width):
+        import ipdb; ipdb.set_trace() # BREAKPOINT
         if self.gripper is None:
             self.gripper = Gripper()
         else:
