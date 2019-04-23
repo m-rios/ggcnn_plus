@@ -57,10 +57,16 @@ class JobEv(mpi.Job):
         sim.disconnect()
         return self
 
+    @property
+    def name(self):
+        scene_name = '_'.join(self.scene_fn.split('/')[-1].split('.')[-2].split('_')[0:2])
+        return 'Epoch: {} Scene: {}'.format(self.net.epoch, scene_name)
+
 class MasterEv(mpi.Master):
     def __init__(self, comm, data):
         self.results = None
         self.results_f = None
+        self.progress = 0
 
         self.model_fns = glob.glob(args.model + '/*.hdf5')
         self.model_name = self.model_fns[0].split('/')[-2]
@@ -100,6 +106,8 @@ class MasterEv(mpi.Master):
                 self.jobs.append(job)
 
     def process_result(self, result):
+        self.progress += 1
+        print('Progress: {}%, result from {}: {}'.format(float(self.progress)/len(self.jobs), result.name, result.result))
         self.results[result.net_idx, result.scene_idx] = result.result
         if not result.result:
             epoch_results_path = os.path.join(self.model_results_path, str(result.net.epoch))

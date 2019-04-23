@@ -7,11 +7,15 @@ from abc import ABCMeta, abstractmethod
 DIETAG = 0
 WORKTAG = 1
 
-class Job:
+class Job(object):
     __metaclass__ = ABCMeta
     @abstractmethod
     def run(self):
         pass
+
+    @property
+    def name(self):
+        return ''
 
 class Master():
     __metaclass__ = ABCMeta
@@ -37,15 +41,15 @@ class Master():
     def run(self):
         # Send first batch of jobs to workers
         for rank in range(1, self.nworkers):
-            job = self.jobs[0]
+            job = self.jobs[rank-1]
             self.comm.send(job, dest=rank, tag=WORKTAG)
-            del self.jobs[0]
         # Keep sending remaining jobs
-        for job in self.jobs:
+        for job in self.jobs[self.nworkers:]:
             result = self.comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=self.status)
             self.process_result(result)
-            self.comm.send(job, dest=self.status.Get_source(), tag=WORKTAG)
-        print '***************************************************', 'waiting for jobs'
+            dest = self.status.Get_source()
+            print('Sending job {} to {}'.format(job.name, dest))
+            self.comm.send(job, dest=dest, tag=WORKTAG)
         # Wait for last jobs to finish
         for rank in range(1, self.nworkers):
             result = self.comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=self.status)

@@ -443,9 +443,9 @@ class Simulator:
         self.open_gripper()
         self.run(epochs=int(1./self.timestep)) # Let object fall
         final_pos,_ = p.getBasePositionAndOrientation(bid)
-        print('Final pos: ', final_pos)
+        #print('Final pos: ', final_pos)
         result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 0.7
-        print('Result: {}'.format(result))
+        #print('Result: {}'.format(result))
         return result
 
     def evaluate_grasp2(self, pose, width):
@@ -613,7 +613,8 @@ class Simulator:
                     break
                 self.step()
             else:
-                print('Move timed out')
+                pass
+                #print('Move timed out')
         except KeyboardInterrupt:
             print 'Cancel move'
             return
@@ -644,11 +645,12 @@ class Simulator:
                 #print('Offset {} {}'.format(pose[0:3] - pos,
                 #    pose[3:6] - ori))
                 if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
-                    print('Arrived within tolerance')
+                    #print('Arrived within tolerance')
                     break
                 self.step()
             else:
-                print('Move timed out')
+                #print('Move timed out')
+                pass
         except KeyboardInterrupt:
             print 'Cancel move'
             return
