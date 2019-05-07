@@ -342,8 +342,8 @@ class Simulator:
             rot = p.getQuaternionFromEuler(rotation)
             p.resetBasePositionAndOrientation(bid,pos, rot)
 
-    def replay(self, log_fn, scene_fn):
-        self.restore(scene_fn, os.environ['MODELS_PATH'])
+    def replay(self, log_fn, scene_fn, models_path=os.environ['MODELS_PATH']):
+        self.restore(scene_fn, models_path)
         if not self.gid:
             self.add_gripper(MODULE_PATH + '/gripper.urdf')
         if not self.bin:
@@ -362,6 +362,8 @@ class Simulator:
                 if qIndex > -1:
                     p.resetJointState(Id,i,record[qIndex-7+17])
             #time.sleep(self.timestep)
+            if self.logger is not None:
+                self.logger.log()
 
     def _read_logfile(self, filename, verbose = True):
         f = open(filename, 'rb')
