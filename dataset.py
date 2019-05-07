@@ -9,6 +9,27 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import h5py
+
+def subsample(dataset_fn, ratio):
+    """
+        subsample a preprocessed dataset (.hdf5).
+    """
+    import network as net
+    output_fn = dataset_fn.replace('.hdf5', '_resampled_{}.hdf5'.format(ratio))
+    input_ds = h5py.File(dataset_fn, 'r')
+    output_ds = h5py.File(output_fn, 'w')
+    for subset in input_ds.iterkeys():
+        for field in input_ds[subset].iterkeys():
+            path = subset + '/' + field
+            output_ds.create_dataset(path, data=input_ds[path])
+
+    for subset in output_ds.iterkeys():
+        path = subset + '/depth_inpainted'
+        for img_idx in range(output_ds[path].shape[0]):
+            output_ds[path][img_idx] = net.subsample(output_ds[path][img_idx], ratio)
+            import ipdb; ipdb.set_trace() # BREAKPOINT
+
 
 class Jacquard:
 

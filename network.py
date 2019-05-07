@@ -153,8 +153,7 @@ def get_grasps_from_output(position, angle, width, n_grasps=1):
     return gs
 
 def subsample(image, factor=0.5):
-    import ipdb; ipdb.set_trace() # BREAKPOINT
-    image_subsampled = rescale(image, factor, anti_aliasing=True)
+    image_subsampled = rescale(image, factor, anti_aliasing=True, multichannel=False)
     return resize(image_subsampled, image.shape, anti_aliasing=True)
 
 class Network:
