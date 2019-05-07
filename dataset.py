@@ -28,8 +28,6 @@ def subsample(dataset_fn, ratio):
         path = subset + '/depth_inpainted'
         for img_idx in range(output_ds[path].shape[0]):
             output_ds[path][img_idx] = net.subsample(output_ds[path][img_idx], ratio)
-            import ipdb; ipdb.set_trace() # BREAKPOINT
-
 
 class Jacquard:
 
