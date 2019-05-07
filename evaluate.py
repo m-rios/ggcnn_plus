@@ -51,7 +51,7 @@ if __name__ == '__main__':
     from keras.models import load_model
     _, height, width, _ = load_model(model_fns[0]).input_shape
 
-    sim = Simulator(gui=args.gui, timeout=4, debug=True)
+    sim = Simulator(gui=args.gui, timeout=4, debug=True, use_egl=False)
     sim.cam.height = height
     sim.cam.width = width
 
