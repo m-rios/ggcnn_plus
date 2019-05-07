@@ -21,7 +21,8 @@ class JobEv(mpi.Job):
     def __init__(self, network, network_idx, depth, scene, scene_name, scene_idx, output_path, sim_log_path, args):
         self.net = network
         self.net_idx = network_idx
-        self.depth = depth self.scene = scene
+        self.depth = depth
+        self.scene = scene
         self.scene_name = scene_name
         self.scene_idx = scene_idx
         self.output_path = output_path
