@@ -26,20 +26,18 @@ MODULE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 class VideoLogger(object):
     def __init__(self, log_fn, timestep, rate=2.0, shape=(900, 900), pos=[-0.75, -0.75, 2]):
-        codec = cv2.VideoWriter_fourcc(*'MJPG')
-        self.video = skvideo.io.FFmpegWriter(log_fn)
+        self.video = skvideo.io.FFmpegWriter(log_fn,outputdict={'-vcodec': 'libx264'})
         self.rate = rate
         self.fn = log_fn
         self.cam = Camera(width=shape[0], height=shape[1], pos=pos, target=[0.5, 0.5,0], far=6,up=[1., 1., 0.], fov=60)
         self.timestep = timestep
         self.epoch = 0
-        self.buffer = np.zeros((1, shape[0], shape[1], 3), dtype=np.uint8)
         self.shape = shape
 
     def log(self):
         if self.epoch % (1./self.timestep//self.rate) == 0:
             rgb = self.cam.snap()[0]
-            rgb = rgb[:,:,0:3].astype(np.uint8).reshape(1,self.shape[0],self.shape[1],3)
+            rgb = rgb[:,:,0:3].astype(np.uint8).reshape(self.shape[0],self.shape[1],3)
             self.video.writeFrame(rgb)
         self.epoch += 1
 
@@ -63,12 +61,13 @@ class OpenGLLogger(object):
     """
     def __init__(self, log_fn):
         self.log_fn = log_fn
+        self.logid = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, self.log_fn)
 
     def log(self):
-        log = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, self.log_fn)
+        pass
 
     def close(self):
-        p.stopLogging()
+        p.stopLogging(self.logid)
 
 
 @auto_str
