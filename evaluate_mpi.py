@@ -4,17 +4,25 @@ import os
 import numpy as np
 import network as net
 import mpi
+import datetime
+import h5py
 
 from simulator.simulator import Simulator, VIDEO_LOGGER, STATE_LOGGER
 from keras.models import load_model
 from mpi4py import MPI
 
+def print_attrs(scenes, f):
+    f.write('SCENES ATTRS:\n')
+    for item in scenes.attrs.items():
+        f.write('{}: {}\n'.format(item[0], item[1]))
+    f.write('---\n')
+
 class JobEv(mpi.Job):
-    def __init__(self, network, network_idx, depth, scene_fn, scene_idx, output_path, sim_log_path, args):
+    def __init__(self, network, network_idx, depth, scene, scene_name, scene_idx, output_path, sim_log_path, args):
         self.net = network
         self.net_idx = network_idx
-        self.depth = depth
-        self.scene_fn = scene_fn
+        self.depth = depth self.scene = scene
+        self.scene_name = scene_name
         self.scene_idx = scene_idx
         self.output_path = output_path
         self.sim_log_path = sim_log_path
@@ -27,13 +35,14 @@ class JobEv(mpi.Job):
         sim.cam.height = int(self.net.height)
         sim.cam.width = int(self.net.width)
 
+        if self.args.subsample is not None:
+            self.depth = net.subsample(self.depth, self.args.subsample)
+
         positions, angles, widths = self.net.predict(self.depth)
 
-        scene_name = '_'.join(self.scene_fn.split('/')[-1].split('.')[-2].split('_')[0:2])
+        sim.restore(self.scene, self.args.models)
 
-        sim.restore(self.scene_fn, self.args.models)
-
-        fn = os.path.join(self.output_path, scene_name +'.png')
+        fn = os.path.join(self.output_path, self.scene_name +'.png')
         net.save_output_plot(self.depth, positions,
                 angles, widths, fn, 1)
 
@@ -47,9 +56,9 @@ class JobEv(mpi.Job):
             pose = np.concatenate((pose, [0, 0, gs.angle]))
 
             if self.args.logvideo:
-                sim.start_log(self.sim_log_path + '/'+scene_name+'.mp4', VIDEO_LOGGER, rate=25)
+                sim.start_log(self.sim_log_path + '/'+self.scene_name+'.mp4', VIDEO_LOGGER, rate=25)
             else:
-                sim.start_log(self.sim_log_path + '/'+scene_name+'.mp4', STATE_LOGGER)
+                sim.start_log(self.sim_log_path + '/'+self.scene_name+'.log', STATE_LOGGER)
             self.result = sim.evaluate_grasp(pose, grasp_width)
             sim.stop_log()
         else:
@@ -59,8 +68,7 @@ class JobEv(mpi.Job):
 
     @property
     def name(self):
-        scene_name = '_'.join(self.scene_fn.split('/')[-1].split('.')[-2].split('_')[0:2])
-        return 'Epoch: {} Scene: {}'.format(self.net.epoch, scene_name)
+        return 'Epoch: {} Scene: {}'.format(self.net.epoch, self.scene_name)
 
 class MasterEv(mpi.Master):
     def __init__(self, comm, data):
@@ -68,19 +76,25 @@ class MasterEv(mpi.Master):
         self.results_f = None
         self.progress = 0
 
-        self.model_fns = glob.glob(args.model + '/*.hdf5')
+        self.data = data
+        self.model_fns = glob.glob(data.model + '/*.hdf5')
         self.model_name = self.model_fns[0].split('/')[-2]
-        self.scene_fns = glob.glob(args.scenes + '/*.csv')
-        self.model_results_path = os.path.join(args.results_path, self.model_name)
+        self.scenes = h5py.File(data.scenes, 'r')
+        self.nscenes = self.scenes['name'].size
+        self.dt = datetime.datetime.now().strftime('%y%m%d_%H%M')
+        self.model_results_path = os.path.join(data.results, '{}_{}'.format(self.dt, self.model_name))
         if not os.path.exists(self.model_results_path):
             os.makedirs(self.model_results_path)
         self.results_fn = self.model_results_path + '/results.txt'
         self.results_f = open(self.results_fn, 'w')
+        self.results_f.write('ARGUMENTS:\n'+''.join(['{}: {}\n'.format(item[0], item[1]) for item in vars(data).items()]))
+        self.results_f.write('---\n')
+        print_attrs(self.scenes, self.results_f)
 
-        self.results = np.empty((len(self.model_fns), len(self.scene_fns)))
+        self.results = np.zeros((len(self.model_fns), self.nscenes))
 
         _, height, width, _ = load_model(self.model_fns[0]).input_shape
-        self.depth = net.read_input_from_scenes(self.scene_fns, width, height)[1]
+        self.depth = self.scenes['depth'][:]
         super(MasterEv, self).__init__(comm, data)
 
     def setup(self):
@@ -101,8 +115,10 @@ class MasterEv(mpi.Master):
                 os.makedirs(sim_log_path)
 
             network = net.Network(model_fn)
-            for scene_idx, scene_fn in enumerate(self.scene_fns):
-                job = JobEv(network, net_idx, self.depth[scene_idx], scene_fn, scene_idx, output_path, sim_log_path, args)
+            for scene_idx in range(self.scenes['name'].size):
+                job = JobEv(network, net_idx, self.depth[scene_idx],
+                        self.scenes['scene'][scene_idx], self.scenes['name'][scene_idx],
+                        scene_idx, output_path, sim_log_path, args)
                 self.jobs.append(job)
 
     def process_result(self, result):
@@ -113,12 +129,13 @@ class MasterEv(mpi.Master):
             epoch_results_path = os.path.join(self.model_results_path, str(result.net.epoch))
             sim_log_path = os.path.join(epoch_results_path, 'sim_logs')
             with open(os.path.join(sim_log_path, 'failures.txt'), 'a+') as f:
-                scene_name = '_'.join(result.scene_fn.split('/')[-1].split('.')[-2].split('_')[0:2])
+                scene_name = result.scene_name
                 f.write(scene_name + '\n')
 
     def compile_results(self):
         accuracies = np.sum(self.results, axis=1)/self.results.shape[1]
-        for epoch, acc in enumerate(accuracies):
+        for net_idx, acc in enumerate(accuracies):
+            epoch = int(self.model_fns[net_idx].split('_')[-2])
             self.results_f.write('Epoch {}: {}%\n'.format(epoch, acc))
         self.results_f.close()
 
@@ -131,11 +148,12 @@ if __name__ == '__main__':
         parser = argparse.ArgumentParser()
         parser.add_argument('model', help='path to the root directory of a model')
         parser.add_argument('--grasps', default=1, help='Number of grasps predicted per image')
-        parser.add_argument('--results_path', default=os.environ['RESULTS_PATH'], help='Path to simulation log files')
+        parser.add_argument('--results', default=os.environ['RESULTS_PATH'], help='Path to simulation log files')
         parser.add_argument('--scenes', default=os.environ['GGCNN_SCENES_PATH'], help='Path to scene files location')
         parser.add_argument('--models', default=os.environ['MODELS_PATH'], help='Path to obj files location')
         parser.add_argument('--logvideo', action='store_true')
         parser.add_argument('--gui', action='store_true')
+        parser.add_argument('--subsample', default=None, type=float, help='Subsample depth image by provided factor before feeding to network')
         parser.add_argument('-e', nargs='+', default=None, type=int, help='epochs to evaluate, if next arg is model, separate with -- ')
 
         args = parser.parse_args()

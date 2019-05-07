@@ -9,7 +9,7 @@ import time
 import math
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
-from utils import Wavefront, silence_stdout
+from utils import Wavefront, silence_stdout, auto_str
 import pkgutil
 egl = pkgutil.get_loader('eglRenderer')
 
@@ -22,6 +22,7 @@ VIDEO_LOGGER = 0
 STATE_LOGGER = 1
 OPENGL_LOGGER = 2
 MODULE_PATH = os.path.dirname(os.path.abspath(__file__))
+
 
 class VideoLogger(object):
     def __init__(self, log_fn, timestep, rate=2.0, shape=(900, 900), pos=[-0.75, -0.75, 2]):
@@ -70,6 +71,7 @@ class OpenGLLogger(object):
         p.stopLogging()
 
 
+@auto_str
 class Camera(object):
 
     def __init__(self, width=300, height=300, fov=40, pos=[0, 0, 1.5],
@@ -223,6 +225,7 @@ class Camera(object):
         return center_world, width
 
 
+@auto_str
 class Simulator:
 
     def __init__(self, gui=False, use_egl=True, timeout=2, timestep=1e-4, debug=False,
@@ -340,13 +343,12 @@ class Simulator:
             p.resetBasePositionAndOrientation(bid,pos, rot)
 
     def replay(self, log_fn, scene_fn):
-        self.restore(scene_fn, os.environ['SHAPENET_PATH'])
-        self.add_gripper(MODULE_PATH + '/gripper.urdf')
+        self.restore(scene_fn, os.environ['MODELS_PATH'])
+        if not self.gid:
+            self.add_gripper(MODULE_PATH + '/gripper.urdf')
+        if not self.bin:
+            self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
         log = self._read_logfile(log_fn, verbose=False)
-        video_fn = log_fn.replace('.log', '.mp4')
-        video = cv2.VideoWriter(video_fn, 0, 25, (300, 300))
-        self.cam.pos = [0, -.7, 2.]
-        self.cam.target = [0,0, 0]
 
         for idx, record in enumerate(log):
             Id = record[2]
@@ -360,9 +362,6 @@ class Simulator:
                 if qIndex > -1:
                     p.resetJointState(Id,i,record[qIndex-7+17])
             #time.sleep(self.timestep)
-            if idx % 500 == 0:
-                rgb = self.cam.snap()[0]
-                video.write(rgb)
 
     def _read_logfile(self, filename, verbose = True):
         f = open(filename, 'rb')
@@ -410,8 +409,8 @@ class Simulator:
 
     def evaluate_grasp(self, pose, width):
         if not self.gid:
-            #self.add_gripper(MODULE_PATH + '/gripper.urdf')
-            self.add_gripper(MODULE_PATH + '/gripper_wide.urdf')
+            self.add_gripper(MODULE_PATH + '/gripper.urdf')
+            #self.add_gripper(MODULE_PATH + '/gripper_wide.urdf')
         else:
             for jid in [0,1,3,4,5]:
                 p.resetJointState(self.gid, jid, 0)
@@ -448,45 +447,6 @@ class Simulator:
         #print('Result: {}'.format(result))
         return result
 
-    def evaluate_grasp2(self, pose, width):
-        import ipdb; ipdb.set_trace() # BREAKPOINT
-        if self.gripper is None:
-            self.gripper = Gripper()
-        else:
-            self.gripper.reset()
-        if not self.bin:
-            self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
-
-        #Post and pregrasp poses
-        pregrasp = pose + [0, 0, .5, 0, 0, 0]
-        postgrasp = p.getBasePositionAndOrientation(self.bin)
-        postgrasp = np.array(postgrasp[0] + postgrasp[1])
-        postgrasp[2] += 0.75
-        bid = self.bodies.next()
-        # Move to pregrasp
-        self.set_gripper_width(width)
-        self.move_gripper_to(pregrasp)
-        # Move to grasp
-        self.move_gripper_to(pose)
-        self.close_gripper()
-        self.set_gripper_width(0, vel=1) # This is intended to firmly grasp the object
-        # Take offset between object's COM and gripper to compute postgrasp
-        gripper_pos = np.array(p.getLinkState(self.gid, 5)[0])
-        object_pos = p.getBasePositionAndOrientation(bid)[0]
-        offset = gripper_pos[:2] - object_pos[:2]
-        postgrasp[:2] += offset
-        # Move to postgrasp
-        #self.move_gripper_to(pose + np.array([0, 0, 1.5, 0, 0, 0]))
-        self.move_gripper_to(postgrasp)
-        self.run(epochs=int(0.5/self.timestep)) # Let inertia die at dropoff point. This prevents object shooting out
-        self.open_gripper()
-        self.run(epochs=int(1./self.timestep)) # Let object fall
-        final_pos,_ = p.getBasePositionAndOrientation(bid)
-        print('Final pos: ', final_pos)
-        result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 0.7
-        print('Result: {}'.format(result))
-        return result
-
     def _remove_body(self, bId):
         del self.old_poses[bId]
         p.removeBody(bId)
@@ -521,26 +481,35 @@ class Simulator:
                 obj_str = ','.join([obj_id] + [str(ps) for ps in pos] + [ str(o) for o in ori] + [str(sc)]) + '\n'
                 csv.write(obj_str)
 
-    def restore(self, fn, path):
+    def get_state(self):
+        state = []
+        for bid in self.bodies:
+            obj_id = self.obj_ids[bid]
+            pos, ori = p.getBasePositionAndOrientation(bid)
+            ori = p.getEulerFromQuaternion(ori)
+            sc = self.get_object_scale(bid)
+            obj_str = ','.join([obj_id] + [str(ps) for ps in pos] + [ str(o) for o in ori] + [str(sc)]) + '\n'
+            state.append(obj_str)
+        return '\n'.join(state)
+
+    def restore(self, csv, path):
         """
             Will read the .csv and .bullet files associated to {fn} and load
             the world accordingly. Will look for linked .obj files in the
             {path} directory
         """
-        assert os.path.exists(fn)
-
         self.reset()
-
-        with open(fn) as csv:
-            csv.readline() # Skip descriptor line
-            for line in csv:
-                fields = line.split(',')
-                obj_fn = os.path.join(path, fields[0] + '.obj')
-                obj_pos = [float(fields[1]),float(fields[2]),float(fields[3])]
-                obj_ori = [float(fields[4]),float(fields[5]),float(fields[6])]
-                scale = float(fields[7])
-                self.load(obj_fn, obj_pos, obj_ori, scale)
-                print('Loaded '+ obj_fn)
+        lines = csv.split('\n')
+        for line in lines:
+            if line == '' or line[:6] == 'obj_id':
+                continue
+            fields = line.split(',')
+            obj_fn = os.path.join(path, fields[0] + '.obj')
+            obj_pos = [float(fields[1]),float(fields[2]),float(fields[3])]
+            obj_ori = [float(fields[4]),float(fields[5]),float(fields[6])]
+            scale = float(fields[7])
+            self.load(obj_fn, obj_pos, obj_ori, scale)
+            print('Loaded '+ obj_fn)
 
         self.cam.target = self.get_clutter_center().tolist()
 

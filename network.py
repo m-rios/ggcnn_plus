@@ -2,6 +2,7 @@ from keras.models import load_model
 from ggcnn.dataset_processing.grasp import detect_grasps
 from ggcnn.dataset_processing.grasp import BoundingBoxes, BoundingBox
 from skimage.filters import gaussian
+from skimage.transform import rescale, resize
 import numpy as np
 import matplotlib.pyplot as plt
 import glob
@@ -150,6 +151,11 @@ def get_grasps_from_output(position, angle, width, n_grasps=1):
             width_img=width,
             no_grasps=n_grasps)
     return gs
+
+def subsample(image, factor=0.5):
+    import ipdb; ipdb.set_trace() # BREAKPOINT
+    image_subsampled = rescale(image, factor, anti_aliasing=True)
+    return resize(image_subsampled, image.shape, anti_aliasing=True)
 
 class Network:
     def __init__(self, model_fn):

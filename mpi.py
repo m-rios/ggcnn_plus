@@ -42,6 +42,7 @@ class Master():
         # Send first batch of jobs to workers
         for rank in range(1, self.nworkers):
             job = self.jobs[rank-1]
+            print('Sending job {} to {}'.format(job.name, rank))
             self.comm.send(job, dest=rank, tag=WORKTAG)
         # Keep sending remaining jobs
         for job in self.jobs[self.nworkers:]:

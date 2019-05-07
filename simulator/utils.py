@@ -118,12 +118,13 @@ class Graspable(object):
 class Wavefront(object):
 
     def __init__(self, fn):
-        self.vertices = np.array([], (None, 3))
+        self.vertices = []
         with open(fn, 'r') as f:
             for line in f.readlines():
                 fields = line.split(' ')
                 if fields[0] == 'v':
-                    self.vertices = np.append(self.vertices, [[float(x) for x in fields[1:4]]], axis=0)
+                    self.vertices.append(fields[1:4])
+        self.vertices = np.array(self.vertices, dtype=np.float32)
 
     @property
     def aabb(self):
@@ -150,3 +151,11 @@ def silence_stdout():
     finally:
         sys.stdout = old_target
 
+def auto_str(cls):
+    def __str__(self):
+        return '%s(%s)' % (
+            type(self).__name__,
+            ', '.join('%s=%s' % item for item in vars(self).items())
+        )
+    cls.__str__ = __str__
+    return cls
