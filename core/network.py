@@ -5,8 +5,7 @@ from skimage.filters import gaussian
 from skimage.transform import rescale, resize
 import numpy as np
 import matplotlib.pyplot as plt
-import glob
-import os
+
 
 def calculate_iou_matches(grasp_positions_out, grasp_angles_out, ground_truth_bbs, no_grasps=1, grasp_width_out=None, min_iou=0.25):
     """
@@ -38,8 +37,8 @@ def calculate_iou_matches(grasp_positions_out, grasp_angles_out, ground_truth_bb
 
     return succeeded, failed
 
-def get_output_plot(depth, position, angle, width, no_grasps=1,
-        ground_truth=None):
+
+def get_output_plot(depth, position, angle, width, no_grasps=1, ground_truth=None):
     depth = depth.squeeze()
     angle = angle.squeeze()
     position = gaussian(position.squeeze(), 5.0, preserve_range=True)
@@ -72,12 +71,11 @@ def get_output_plot(depth, position, angle, width, no_grasps=1,
     return fig
 
 
-def plot_output(depth, positions, angles, widths, no_grasps=1,
-        ground_truth=None):
-    fig = get_output_plot(depth, positions, angles, widths, no_grasps,
-            ground_truth)
+def plot_output(depth, positions, angles, widths, no_grasps=1, ground_truth=None):
+    fig = get_output_plot(depth, positions, angles, widths, no_grasps, ground_truth)
     plt.show(fig)
     plt.close(fig)
+
 
 def save_output_plot(depth, positions, angles, widths, filename, no_grasps=1,
         ground_truth=None):
@@ -85,48 +83,6 @@ def save_output_plot(depth, positions, angles, widths, filename, no_grasps=1,
     plt.savefig(filename)
     plt.close(fig)
 
-def read_input_from_scenes(scenes_fn, height, width):
-    """
-    Args
-    ---
-    scenes_fn: list of str
-        A list with the .csv filenames
-    height, width: int
-
-    Returns
-    -------
-        See read_input
-    """
-    assert len(scenes_fn) > 0, 'No input files were found'
-    input_fns = [fn.replace('_scene.csv', '_{}_{}.npy'.format(height, width)) for fn in scenes_fn]
-
-    return read_input(input_fns, height, width)
-
-def read_input(input_fns, height, width):
-    """
-    Reads .npy files in input_fns and combines them
-
-    Args
-    ----
-        input_fns: list of str
-            list of .npy files
-    Returns
-    -------
-        rgb: np.ndarray
-            a (N,height, width, 3) array of type uint8  encoding rgb images
-        depth: np.nadarray
-            a (N, height, width) array of type float32 encoding the depth
-            images
-    """
-    index = {}
-    input = np.zeros((len(input_fns), height, width, 4), np.float32)
-
-    for idx, input_fn in enumerate(input_fns):
-        input_name = input_fn.split('/')[-1].split('_')[0]
-        index[input_name] = idx
-        input[idx,:] = np.load(input_fn)
-
-    return input[:,:,:,0:3].astype(np.uint8), input[:,:,:,3]
 
 def get_grasps_from_output(position, angle, width, n_grasps=1):
     """
@@ -152,9 +108,11 @@ def get_grasps_from_output(position, angle, width, n_grasps=1):
             no_grasps=n_grasps)
     return gs
 
+
 def subsample(image, factor=0.5):
     image_subsampled = rescale(image, factor, anti_aliasing=True, multichannel=False)
     return resize(image_subsampled, image.shape, anti_aliasing=True)
+
 
 class Network:
     def __init__(self, model_fn):
@@ -209,7 +167,6 @@ class Network:
         width = model_output[3] * 150.
 
         return position, angle, width
-
 
 
 if __name__ == '__main__':
