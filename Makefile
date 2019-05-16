@@ -1,12 +1,29 @@
+ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+TEST_MODULES := test
+PYTHONPATH := .
+VENV := .venv
+PYTHON := env PYTHONPATH=$(PYTHONPATH) $(VENV)/bin/python
+PIP := $(VENV)/bin/pip
+SITE_PACKAGES = $(VENV)/lib/python2.7/site-packages # This is not crossplatform. Should fix
+
+DEFAULT_PYTHON := /usr/bin/python2
+VIRTUALENV := /usr/bin/virtualenv
+
+REQUIREMENTS := -r requirements.txt
+
+DEPENDENCIES := ggcnn simulator
+
 init:
-	virtualenv .venv
-	source .venv/bin/activate
-	pip install -r requirements.txt
-	echo $(pwd):'$PYTHONPATH' >> .venv/bin/activate
+	$(VIRTUALENV) $(VENV)
+	$(PIP) install $(REQUIREMENTS)
+	for dep in $(DEPENDENCIES); do\
+		ln -fs $$dep $(SITE_PACKAGES); \
+	done
+cpu: init
+	$(PIP) install tensorflow
+gpu: init
+	$(PIP) install tensorflow-gpu
+test:
+	$(PYTHON) -m unittest discover
 
-initcpu: init
-	pip install tensorflow
-
-initgpu: init
-	pip install tensorflow-gpu
-
+.PHONY: init gpu cpu test
