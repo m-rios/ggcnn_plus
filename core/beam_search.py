@@ -27,6 +27,7 @@ class BeamSearch:
         """
         raise NotImplemented
 
+    @abstractmethod
     def evaluate(self, node):
         """
         Heuristic that determines how good a node is

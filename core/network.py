@@ -213,7 +213,7 @@ class Network:
 
 
 if __name__ == '__main__':
-    network = Network('ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+    network = Network('../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
     rgbs, depths = read_input_from_scene_path('/Users/mario/Desktop/scenes', network.height, network.width)
     positions, angles, widths = network.predict(depths)
     for img_idx in range(depths.shape[0]):

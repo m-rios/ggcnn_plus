@@ -1,18 +1,8 @@
 import argparse
-import json
 import os
 import glob
-import matplotlib.pyplot as plt
-import numpy as np
-import network as net
+from core import network as net
 import h5py
-
-from keras.models import load_model
-from skimage.filters import gaussian
-from ggcnn.dataset_processing.grasp import BoundingBoxes
-from ggcnn.dataset_processing import grasp
-from ggcnn.dataset_processing.image import DepthImage
-from dataset import Jacquard
 
 parser = argparse.ArgumentParser()
 parser.add_argument('model', help='path to directory containing model epochs')

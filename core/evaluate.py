@@ -68,7 +68,6 @@ if __name__ == '__main__':
     print_attrs(scenes, results_f)
 
     depth = scenes['depth'][:]
-    import ipdb; ipdb.set_trace() # BREAKPOINT
 
     # Iterate through epochs
     for model_fn in model_fns:

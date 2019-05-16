@@ -1,4 +1,4 @@
-from dataset import Jacquard
+from utils.dataset import Jacquard
 from ggcnn.dataset_processing import grasp
 from ggcnn.dataset_processing.image import Image, DepthImage
 

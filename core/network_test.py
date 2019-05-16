@@ -1,10 +1,6 @@
-from keras.models import load_model
-from skimage.filters import gaussian
-from ggcnn.dataset_processing.grasp import detect_grasps, BoundingBoxes
-from simulator.simulator import Simulator, VIDEO_LOGGER, OPENGL_LOGGER
-import matplotlib.pyplot as plt
+from simulator.simulator import Simulator, VIDEO_LOGGER
 import numpy as np
-import network as net
+from core import network as net
 import argparse
 import os
 import h5py

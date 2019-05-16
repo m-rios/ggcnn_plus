@@ -3,7 +3,7 @@ import glob
 import os
 import numpy as np
 import network as net
-import mpi
+from utils import mpi
 import datetime
 import h5py
 

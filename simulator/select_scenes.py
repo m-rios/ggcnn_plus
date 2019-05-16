@@ -4,7 +4,7 @@ import pylab as plt
 import argparse
 import os
 import glob
-from dataset import Jacquard
+from utils.dataset import Jacquard
 
 roll = 0.
 pitch = 0.

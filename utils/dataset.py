@@ -2,7 +2,7 @@
 Class to easily handle Jacquard dataset
 """
 from skimage import io
-from ggcnn.dataset_processing.grasp import BoundingBox, BoundingBoxes, Grasp
+from ggcnn.dataset_processing.grasp import BoundingBoxes, Grasp
 
 import glob
 import os
@@ -15,7 +15,7 @@ def subsample(dataset_fn, ratio):
     """
         subsample a preprocessed dataset (.hdf5).
     """
-    import network as net
+    from core import network as net
     output_fn = dataset_fn.replace('.hdf5', '_resampled_{}.hdf5'.format(ratio))
     input_ds = h5py.File(dataset_fn, 'r')
     output_ds = h5py.File(output_fn, 'w')
