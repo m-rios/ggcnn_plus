@@ -142,3 +142,5 @@ class BeamSearch:
             actions_trace.append(actions[best_parent_idx])
 
         return nodes_trace, scores_trace, actions_trace
+
+

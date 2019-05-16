@@ -15,7 +15,7 @@ Node = (node_idx, value)
 """
 
 from unittest import TestCase
-from core.beam_search import BeamSearch
+from utils.beam_search import BeamSearch
 
 
 class TestBeamSearch(TestCase):
@@ -65,3 +65,5 @@ class TestBeamSearch(TestCase):
         bs = self.BS()
         nodes, scores, actions = bs.run((0, 1), k=3, depth=3)
         self.assertTrue(nodes == [(0, 1), (1, 2), (4, 3), (9, 14)])
+        self.assertTrue(scores == [1, 2, 3, 14])
+        self.assertTrue(actions == [None, 'child 0', 'child 1', 'child 0'])
