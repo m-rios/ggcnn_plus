@@ -9,18 +9,18 @@ class BeamSearch:
         import logging
         self.log = logging
         level = self.log.DEBUG if debug else self.log.INFO
-        fmt = "[%(levelname)s]: %(funcName)s():%(lineno)i: %(message)s"
+        fmt = "[%(levelname)s]: [%(asctime)s]: %(funcName)s():%(lineno)i: %(message)s"
         self.log.basicConfig(level=level, format=fmt)
 
         super(BeamSearch, self).__init__()
 
     @abstractmethod
-    def node_actions(self, node):
+    def expand(self, node):
         """
-        Generates a list of actions that branch from the given node
-        :param node: tree node from which the actions branch
-        :return: A list of tuples of 2 elements. tuple[0] is a function that will execute the action. tuple[1] contains
-        parameters that might be needed for tuple[0]
+        Expands the input node into its children
+        :param node: node to be expanded
+        :return: children, scores, actions; children: a list with the children of node; scores: a list of the score of
+        each child; actions: a list of the actions that generated each child
         """
         raise NotImplemented
 
@@ -47,7 +47,7 @@ class BeamSearch:
         self.log.debug('k = {}; depth = {}'.format(k, depth))
         # Initialize return values for root
         nodes = [root]
-        parents_idx = [0]
+        parents_idx = [-1]
         scores = [-1]
         actions = [None]
         beam_width = None
@@ -63,13 +63,11 @@ class BeamSearch:
             children_actions = []
 
             for node in queue:
-                child_actions = self.node_actions(node)
-                children_actions += child_actions
-                for action, args in child_actions:
-                    child = action(node, **args)
-                    children.append(child)
-                    children_parents.append(parent_idx)
-                    children_scores.append(self.evaluate(child))
+                node_children, node_scores, node_actions = self.expand(node)
+                children += node_children
+                children_parents += [parent_idx]*len(node_children)
+                children_scores += node_scores
+                children_actions += node_actions
                 parent_idx += 1
 
             beam_width = min(len(children), k)
@@ -118,15 +116,26 @@ class BeamSearch:
         actions_trace = [None]
 
         for d in range(1, depth+1)[::-1]:  # Decrement d on each step so that max explored level is depth
+            self.log.info('Starting lookahead at depth {}'.format(depth-d))
             nodes, parents_idx, scores, actions, beam_width = self.lookahead(root, k, d)
+            self.log.info('Best child at depth {} found'.format(depth-d))
+
+            self.log.debug('nodes = {}'.format(nodes))
+            self.log.debug('parents_idx = {}'.format(parents_idx))
 
             beam_scores = scores[-beam_width:]
-            best_leaf_idx = (len(beam_scores) - beam_width + np.argsort(beam_scores)[-1])
-            best_parent_idx = parents_idx[best_leaf_idx]
-            best_parent = nodes[best_parent_idx]
-            root = self.post_lookahead(best_parent)
+            best_leaf_idx = (len(scores) - beam_width + np.argsort(beam_scores)[-1])
 
-            self.log.debug('')
+            self.log.debug('best_leaf_idx = {}'.format(best_leaf_idx))
+
+            best_parent_idx = parents_idx[best_leaf_idx]
+            while parents_idx[best_parent_idx] != 0:
+                best_parent_idx = parents_idx[best_parent_idx]
+
+            best_parent = nodes[best_parent_idx]
+            self.log.debug('best_parent = {}'.format(best_parent))
+
+            root = self.post_lookahead(best_parent)
 
             nodes_trace.append(root)
             scores_trace.append(self.evaluate(root))

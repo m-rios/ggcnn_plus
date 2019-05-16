@@ -16,7 +16,6 @@ Node = (node_idx, value)
 
 from unittest import TestCase
 from core.beam_search import BeamSearch
-import numpy as np
 
 
 class TestBeamSearch(TestCase):
@@ -35,32 +34,31 @@ class TestBeamSearch(TestCase):
             }
             super(TestBeamSearch.BS, self).__init__(debug=True)
 
-        def node_actions(self, node):
+        def expand(self, node):
+            children = []
+            scores = []
             actions = []
 
-            def action(n, children, children_idx):
-                return children[n[0]][children_idx]
+            for action_idx, child in enumerate(self.children[node[0]]):
+                children.append(child)
+                scores.append(child[1])
+                actions.append('child {}'.format(action_idx))
 
-            for c_idx in range(len(self.children[node[0]])):
-                actions.append((action, {'children_idx': c_idx, 'children': self.children}))
-            return actions
+            return children, scores, actions
 
         def evaluate(self, node):
             return node[1]
-
-        def post_lookahead(self, node):
-            return node[0], node[1] + 1
 
     def test_lookahead(self):
         bs = self.BS()
         nodes, parents, scores, actions, bw = bs.lookahead((0, 1), k=3, depth=2)
         self.assertTrue(nodes == [(0, 1), (2, 4), (1, 2), (7, 9), (5, 7), (3, 6)])
-        self.assertTrue(parents == [0, 0, 0, 1, 2, 2])
+        self.assertTrue(parents == [-1, 0, 0, 1, 2, 2])
         self.assertTrue(scores == [-1, 4, 2, 9, 7, 6])
 
         nodes, parents, scores, actions, bw = bs.lookahead((0, 1), k=3, depth=3)
         self.assertTrue(nodes == [(0, 1), (2, 4), (1, 2), (7, 9), (5, 7), (3, 6), (10, 10)])
-        self.assertTrue(parents == [0, 0, 0, 1, 2, 2, 4])
+        self.assertTrue(parents == [-1, 0, 0, 1, 2, 2, 4])
         self.assertTrue(scores == [-1, 4, 2, 9, 7, 6, 10])
 
     def test_run(self):
