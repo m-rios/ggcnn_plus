@@ -1,6 +1,5 @@
 from abc import ABCMeta, abstractmethod
 import numpy as np
-import logging
 
 
 class BeamSearch:
@@ -9,11 +8,9 @@ class BeamSearch:
     def __init__(self, debug=False):
         import logging
         self.log = logging
-
-        if debug:
-            self.log.basicConfig(level=self.log.DEBUG)
-        else:
-            self.log.basicConfig(level=self.log.INFO)
+        level = self.log.DEBUG if debug else self.log.INFO
+        fmt = "[%(levelname)s]: %(funcName)s():%(lineno)i: %(message)s"
+        self.log.basicConfig(level=level, format=fmt)
 
         super(BeamSearch, self).__init__()
 
@@ -47,39 +44,51 @@ class BeamSearch:
         node c; scores: list of the scores of the nodes; actions: list of the actions that resulted in each node;
         beam_width: last beam width used (in case that available nodes at leaf depth is lower than k)
         """
+        self.log.debug('k = {}; depth = {}'.format(k, depth))
         # Initialize return values for root
         nodes = [root]
-        parents_idx = [-1]
+        parents_idx = [0]
         scores = [-1]
         actions = [None]
         beam_width = None
 
         queue = [root]  # Nodes to be expanded
+        parent_idx = 0
 
         for d in range(depth):
+            self.log.debug('d = {}'.format(d))
             children = []
             children_parents = []
             children_scores = []
             children_actions = []
 
-            for node_idx, node in enumerate(queue):
-                children_actions += self.node_actions(node)
-                for action, args in children_actions:
-                    child = action(node, args)
+            for node in queue:
+                child_actions = self.node_actions(node)
+                children_actions += child_actions
+                for action, args in child_actions:
+                    child = action(node, **args)
                     children.append(child)
-                    children_parents.append(node_idx)
+                    children_parents.append(parent_idx)
                     children_scores.append(self.evaluate(child))
+                parent_idx += 1
 
             beam_width = min(len(children), k)
             sort_idx = np.argsort(children_scores)[::-1]  # Sort indices descending
             selected_idx = sort_idx[:beam_width]  # Trim selection by beam_width
 
-            nodes.append(children[selected_idx])
-            parents_idx.append(children_parents[selected_idx])
-            scores.append(children_scores[selected_idx])
-            actions.append(children_actions[selected_idx])
+            self.log.debug('queue = {}'.format(queue))
+            self.log.debug('children = {}'.format(children))
+            self.log.debug('children_parents = {}'.format(children_parents))
+            self.log.debug('children_scores = {}'.format(children_scores))
+            self.log.debug('children_actions = {}'.format(children_actions))
+            self.log.debug('selected_idx = {}'.format(selected_idx))
 
-            queue = children[selected_idx]
+            queue = [children[s] for s in selected_idx]
+
+            nodes += queue
+            parents_idx += [children_parents[s] for s in selected_idx]
+            scores += [children_scores[s] for s in selected_idx]
+            actions += [children_actions[s] for s in selected_idx]
 
         return nodes, parents_idx, scores, actions, beam_width
 
@@ -98,13 +107,29 @@ class BeamSearch:
         :param node: Starting node of the search
         :param k: Beam width, max number of nodes that will be expanded at a given depth
         :param depth: Max depth the search will explore
-        :return: [node, score, node_actions]; node: the node with the highest evaluation after the beam search; score:
-        the score of the node; node_actions: a list of the actions that took to reach node
+        :return: [nodes_trace, scores_trace, actions_trace]; node_trace: a list with the nodes that resulted from each
+        iteration; scores_trace: a list with the scores of each node; actions_trace: a list with the actions that
+        produced each node. The lists are ordered from top to bottom in the tree hierarchy. To get the last node
+        expanded (should be the best) use nodes_trace[-1]
         """
         root = node
+        nodes_trace = [node]
+        scores_trace = [self.evaluate(node)]
+        actions_trace = [None]
 
         for d in range(1, depth+1)[::-1]:  # Decrement d on each step so that max explored level is depth
-            nodes, parents_idx, scores, actions, beam_width = self.lookahead(root, k, depth)
-            beam_score = scores[-beam_width:]
-            best_node_idx = np.argsort(beam_score)[::-1]
-            root = self.post_lookahead(nodes[best_node_idx])
+            nodes, parents_idx, scores, actions, beam_width = self.lookahead(root, k, d)
+
+            beam_scores = scores[-beam_width:]
+            best_leaf_idx = (len(beam_scores) - beam_width + np.argsort(beam_scores)[-1])
+            best_parent_idx = parents_idx[best_leaf_idx]
+            best_parent = nodes[best_parent_idx]
+            root = self.post_lookahead(best_parent)
+
+            self.log.debug('')
+
+            nodes_trace.append(root)
+            scores_trace.append(self.evaluate(root))
+            actions_trace.append(actions[best_parent_idx])
+
+        return nodes_trace, scores_trace, actions_trace
