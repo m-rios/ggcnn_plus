@@ -19,7 +19,7 @@ scene_ds = h5py.File(args.scenes, 'r')
 scene_idx = int(np.where(scene_ds['name'][:] == args.scene_name)[0])
 scene = scene_ds['scene'][scene_idx]
 
-network = net.Network(args.model)
+network = net.Network(model_fn=args.model)
 sim = Simulator(gui=args.gui, timeout=4, debug=True)
 sim.restore(scene, args.models)
 depth = scene_ds['depth'][scene_idx]

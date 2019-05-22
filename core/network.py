@@ -1,4 +1,4 @@
-from keras.models import load_model
+import keras
 from ggcnn.dataset_processing.grasp import detect_grasps
 from ggcnn.dataset_processing.grasp import BoundingBoxes, BoundingBox
 from skimage.filters import gaussian
@@ -115,10 +115,13 @@ def subsample(image, factor=0.5):
 
 
 class Network:
-    def __init__(self, model_fn):
-        self.model_fn = model_fn
-        self.epoch = int(model_fn.split('_')[-2])
-        self.model = load_model(model_fn)
+    def __init__(self, model_fn=None, model=None):
+        if model is not None:
+            self.model = model
+        elif model_fn is not None:
+            self.model = keras.models.load_model(model_fn)
+        else:
+            raise ValueError('Either model_fn or model must be provided')
 
     @property
     def height(self):
@@ -127,6 +130,69 @@ class Network:
     @property
     def width(self):
         return self.model.input.shape[2]
+
+    def copy_model(self):
+        new_model = keras.models.clone_model(self.model)
+        new_model.set_weights(self.model.get_weights())
+        return new_model
+
+    def insert_layer(self, layer_idx, layer):
+        """
+        Inserts a new layer into an existing model and returns a copy
+        :param layer_idx: Layer number bellow which to insert the layer
+        :param layer: keras.layers function
+        :return: a copy of the model with the layer inserted
+        """
+        input_layer = self.model.layers[layer_idx]
+        x = layer(input_layer.output)
+
+        # Reconnect intermediate layers
+        for hidden_layer in self.model.layers[layer_idx + 1:-len(self.model.output)]:
+            x = hidden_layer(x)
+        # Reconnect output layers
+        outputs = []
+        for output_layer in self.model.layers[-len(self.model.output):]:
+            outputs.append(output_layer(x))
+
+        return keras.models.Model(self.model.input, outputs)
+
+    def wider(self, layer):
+        """
+        Adds convolutional filters to a layer and adjusts weights using transfer learning
+        :param layer: layer number that will be modified
+        :return: A copy of self with the updated layer
+        """
+        pass
+
+    def deeper(self, layer):
+        """
+        Adds a new layer and adjusts weights using transfer learning
+        :param layer: layer number bellow which the new layer will be added
+        :return: A copy of self with the updated layers
+        """
+        temp_model = self.copy_model()
+        input_layer = temp_model.layers[layer]
+        assert type(input_layer).__name__ == 'Conv2D'
+        kernel_size = input_layer.kernel_size
+        assert (np.mod(kernel_size, 2) == 1).all()
+        n_filters = input_layer.filters
+        activation = input_layer.activation
+        new_name = input_layer.name + '_deeper'
+
+        new_layer = keras.layers.Conv2D(n_filters, kernel_size=kernel_size, padding='same', activation=activation,
+                                        kernel_initializer='zeros',
+                                        bias_initializer='zeros',
+                                        name=new_name)
+        new_model = self.insert_layer(layer, new_layer)
+
+        w, b = new_model.layers[layer + 1].get_weights()
+        center_row = int(kernel_size[0]/2.)
+        center_col = int(kernel_size[1]/2.)
+        for f in range(n_filters):
+            w[center_row, center_col, f, f] = 1.
+        new_model.layers[layer + 1].set_weights([w, b])
+
+        return Network(model=new_model)
 
     def predict(self, depth, subtract_mean=True):
         """
@@ -170,7 +236,7 @@ class Network:
 
 
 if __name__ == '__main__':
-    network = Network('../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+    network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
     rgbs, depths = read_input_from_scene_path('/Users/mario/Desktop/scenes', network.height, network.width)
     positions, angles, widths = network.predict(depths)
     for img_idx in range(depths.shape[0]):

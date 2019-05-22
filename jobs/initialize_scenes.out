@@ -1,0 +1,89 @@
+pybullet build time: Mar 29 2019 16:52:54
+Processing: /home/s3485781/obj_test/871dcd6740ed8d2891a7ac029a825f73.obj
+Processing: /home/s3485781/obj_test/a81f1dbe7fe55b82ea6603e098b731b6.obj
+Processing: /home/s3485781/obj_test/4461bc94fa290df623cc5830459cc4a2.obj
+Processing: /home/s3485781/obj_test/82707cb29ebb39e44c0e75031159cd3c.obj
+Processing: /home/s3485781/obj_test/461664fa3a9ad7a18ee45bd8e008284e.obj
+Processing: /home/s3485781/obj_test/d8c738e258187a0f91663a74ccd2338.obj
+Processing: /home/s3485781/obj_test/99e55a6a9ab18d31cc9c4c1909a0f80.obj
+Processing: /home/s3485781/obj_test/fe92b86fffcd4c9bdac644e042aa70b8.obj
+Processing: /home/s3485781/obj_test/8135c2fa90bb3d2cd46f60ef67edc288.obj
+Processing: /home/s3485781/obj_test/7e4bcbb1ec27944fe08bcdb812e5e7f3.obj
+Processing: /home/s3485781/obj_test/f013eb726f09c220e257977de03eb2a0.obj
+Processing: /home/s3485781/obj_test/7c032d2cf3a2303244298dba366b34fa.obj
+Processing: /home/s3485781/obj_test/1b05971a4373c7d2463600025db2266.obj
+Processing: /home/s3485781/obj_test/2159e03900c54d0f2846fa729d90e125.obj
+Processing: /home/s3485781/obj_test/648bdbefbe72c6e596d5fa1ee6ada8d1.obj
+Processing: /home/s3485781/obj_test/5a6d54d527a9bf01d6944324b21393b5.obj
+Processing: /home/s3485781/obj_test/30e4d5f28706a95abf37a318b55c6a3c.obj
+Processing: /home/s3485781/obj_test/40854c60c58c5aacb2da7c1724c3c67d.obj
+Processing: /home/s3485781/obj_test/6c478f3b08323fef8f257ecba9a6ef8.obj
+Processing: /home/s3485781/obj_test/8754e9aaeecabbe7b12f3136bf6bffbd.obj
+Processing: /home/s3485781/obj_test/72035b31030524aaa0bb41a7cd462066.obj
+Processing: /home/s3485781/obj_test/21addfde981f0e3445c6cb69e0968783.obj
+Processing: /home/s3485781/obj_test/dac4af24e2facd7d3000ca4b04fcd6ac.obj
+Processing: /home/s3485781/obj_test/3c07aa31d7ce85cb1994c5c7230e7e1a.obj
+Processing: /home/s3485781/obj_test/83fd5e88eca47f1dab298e30fc6f45ba.obj
+Processing: /home/s3485781/obj_test/427139e42c842b4fe931b9a85fdc07c.obj
+Processing: /home/s3485781/obj_test/475c53f4ca18cfcb6868df9ac74c844c.obj
+Processing: /home/s3485781/obj_test/994dccd2cb784510a6fee8e2140acec9.obj
+Processing: /home/s3485781/obj_test/cd0563a71a03b69688dcbe86402c7c15.obj
+Processing: /home/s3485781/obj_test/9efea49e9044df8f91663a74ccd2338.obj
+Processing: /home/s3485781/obj_test/360fff3feecb161321eee0f69ef7eada.obj
+Processing: /home/s3485781/obj_test/719247f55d610618ebddcb9d9a6a8f8f.obj
+Processing: /home/s3485781/obj_test/4cb06ad06efd220f2dbc7bc49f32f0f.obj
+Processing: /home/s3485781/obj_test/cb9161ad56853a6735836c728d324152.obj
+Processing: /home/s3485781/obj_test/a2b0c946309152d598d5fc0473d00a1c.obj
+Processing: /home/s3485781/obj_test/9efb86c07170d7e897ec301178d1c7e.obj
+Processing: /home/s3485781/obj_test/3da1b3bcd79ca884506e6d2fa30a0ec8.obj
+Processing: /home/s3485781/obj_test/4e047a619a8a088ff48658e11c1cb712.obj
+Processing: /home/s3485781/obj_test/c67780ee1bba00bb647b426013ef999b.obj
+Processing: /home/s3485781/obj_test/580bd447352d1ef56d9a9c479a2ac832.obj
+Processing: /home/s3485781/obj_test/d2fdea402f3f789277252a7be2502581.obj
+Processing: /home/s3485781/obj_test/622eafae1b0bb4de5a9e5625a77d4b4b.obj
+Processing: /home/s3485781/obj_test/1d4480abe9aa45ce51a99c0e19a8a54.obj
+Processing: /home/s3485781/obj_test/f18befe5cd771ef4d490a2f9c1600338.obj
+Processing: /home/s3485781/obj_test/7a296b0db026db4cdcde2c9d75292e6b.obj
+Processing: /home/s3485781/obj_test/a80404b6357985f651479823c59bd50f.obj
+Processing: /home/s3485781/obj_test/9a31a1d953a0871d4212ff51b27f0221.obj
+Processing: /home/s3485781/obj_test/3843253da3eae7b09e4965f0106e00d9.obj
+Processing: /home/s3485781/obj_test/2d645a4a9129d55d7b81fe99f6b4b15f.obj
+Processing: /home/s3485781/obj_test/259539bd48513e3410d32c800df6e3dd.obj
+
+
+###############################################################################
+Peregrine Cluster
+Job 4929801 for user 's3485781'
+Finished at: Fri Mar 29 17:00:27 CET 2019
+
+Job details:
+============
+
+Name                : initialize_scenes
+User                : s3485781
+Partition           : short
+Nodes               : pg-node004
+Cores               : 1
+State               : COMPLETED
+Submit              : 2019-03-29T17:00:18
+Start               : 2019-03-29T17:00:19
+End                 : 2019-03-29T17:00:27
+Reserved walltime   : 00:30:00
+Used walltime       : 00:00:08
+Used CPU time       : 00:00:06 (efficiency: 78.64%)
+% User (Computation): 81.27%
+% System (I/O)      : 18.73%
+Mem reserved        : 4G/node
+Max Mem used        : 12.00K (pg-node004)
+Max Disk Write      : 0.00  (pg-node004)
+Max Disk Read       : 0.00  (pg-node004)
+
+
+Acknowledgements:
+=================
+
+Please see this page if you want to acknowledge Peregrine in your publications:
+
+https://redmine.hpc.rug.nl/redmine/projects/peregrine/wiki/ScientificOutput
+
+################################################################################

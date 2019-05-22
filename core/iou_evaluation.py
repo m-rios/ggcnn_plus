@@ -43,7 +43,7 @@ for model_fn in model_fns:
     if args.saveviz and not os.path.exists(epoch_path):
         os.makedirs(epoch_path)
     print('Evaluating epoch ' + epoch)
-    network = net.Network(model_fn)
+    network = net.Network(model_fn=model_fn)
     positions, angles, widths = network.predict(depth, subtract_mean=False)
 
     succeeded, failed = net.calculate_iou_matches(positions, angles, bbs,

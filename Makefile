@@ -17,7 +17,7 @@ init:
 	$(VIRTUALENV) $(VENV)
 	$(PIP) install $(REQUIREMENTS)
 	for dep in $(DEPENDENCIES); do\
-		ln -fs $$dep $(SITE_PACKAGES); \
+		ln -rfs $$dep $(SITE_PACKAGES); \
 	done
 cpu: init
 	$(PIP) install tensorflow

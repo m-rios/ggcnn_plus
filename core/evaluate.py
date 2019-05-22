@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
         print('Evaluating epoch {} model {}'.format(model_name, epoch))
 
-        network = net.Network(model_fn)
+        network = net.Network(model_fn=model_fn)
 
         positions, angles, widths = network.predict(depth)
 

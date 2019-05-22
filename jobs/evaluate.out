@@ -1,0 +1,40 @@
+/var/spool/slurmd/job5904950/slurm_script: line 12: /home/s3485781/.ml_cpu: No such file or directory
+/var/spool/slurmd/job5904950/slurm_script: line 15: mpirun: command not found
+
+
+###############################################################################
+Peregrine Cluster
+Job 5904950 for user 's3485781'
+Finished at: Sat May 18 18:00:36 CEST 2019
+
+Job details:
+============
+
+Name                : evaluate
+User                : s3485781
+Partition           : short
+Nodes               : pg-node005
+Cores               : 3
+State               : FAILED
+Submit              : 2019-05-18T18:00:20
+Start               : 2019-05-18T18:00:21
+End                 : 2019-05-18T18:00:36
+Reserved walltime   : 00:30:00
+Used walltime       : 00:00:15
+Used CPU time       : --
+% User (Computation): 63.16%
+% System (I/O)      : 36.84%
+Mem reserved        : 12G/node
+Max Mem used        : 0.00  (pg-node005)
+Max Disk Write      : 0.00  (pg-node005)
+Max Disk Read       : 0.00  (pg-node005)
+
+
+Acknowledgements:
+=================
+
+Please see this page if you want to acknowledge Peregrine in your publications:
+
+https://redmine.hpc.rug.nl/redmine/projects/peregrine/wiki/ScientificOutput
+
+################################################################################

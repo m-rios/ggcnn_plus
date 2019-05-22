@@ -115,7 +115,7 @@ class MasterEv(mpi.Master):
             if not os.path.exists(sim_log_path):
                 os.makedirs(sim_log_path)
 
-            network = net.Network(model_fn)
+            network = net.Network(model_fn=model_fn)
             for scene_idx in range(self.scenes['name'].size):
                 job = JobEv(network, net_idx, self.depth[scene_idx],
                         self.scenes['scene'][scene_idx], self.scenes['name'][scene_idx],
