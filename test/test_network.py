@@ -36,3 +36,8 @@ class TestNetwork(TestCase):
         for o1, o2 in zip(output1, output2):
             print 'o1: {}\no2: {}'.format(o1.flatten(), o2.flatten())
             self.assertTrue((np.round(o1, 2) == np.round(o2, 2)).all())
+
+    def test_conv_layer_idxs(self):
+        network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        layers = network.conv_layer_idxs
+        self.assertTrue([1, 2, 3] == layers)

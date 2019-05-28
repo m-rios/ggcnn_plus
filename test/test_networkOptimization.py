@@ -7,9 +7,9 @@ from core.network import Network
 class TestNetworkOptimization(TestCase):
     def test_expand(self):
         node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
-        op = NetworkOptimization()
+        op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5')
         children, scores, actions = op.expand(node)
-        self.fail()
+        self.assertTrue(len(children) == 6)
 
     def test_evaluate(self):
         node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')

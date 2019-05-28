@@ -131,6 +131,15 @@ class Network:
     def width(self):
         return self.model.input.shape[2]
 
+    @property
+    def conv_layer_idxs(self):
+        """
+        The indices of the hidden convolutional layers in the model
+        """
+        conv_layers = filter(lambda x: type(x[1]).__name__ == 'Conv2D', enumerate(self.model.layers))
+        conv_layers = conv_layers[:-len(self.model.output)]
+        return list(zip(*conv_layers)[0])
+
     def copy_model(self):
         new_model = keras.models.clone_model(self.model)
         new_model.set_weights(self.model.get_weights())
