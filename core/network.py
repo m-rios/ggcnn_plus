@@ -136,18 +136,30 @@ class Network:
         new_model.set_weights(self.model.get_weights())
         return new_model
 
-    def insert_layer(self, layer_idx, layer):
+    def reconnect_model(self, layer_idx, layers, replace=False):
         """
-        Inserts a new layer into an existing model and returns a copy
-        :param layer_idx: Layer number bellow which to insert the layer
-        :param layer: keras.layers function
-        :return: a copy of the model with the layer inserted
+        Reconnects last_layer with the reminder of layers after layer_idx
+        :param layer_idx: Index in the model of the first layer to be reconnected
+        :param layers: An ordered list of the layers to be reconnected
+        :param replace: If True layers will replace existing layers at and bellow layer_idx. If False layers will be added
+        bellow layer_idx
+        :return: A copy of the reconnected model
         """
-        input_layer = self.model.layers[layer_idx]
-        x = layer(input_layer.output)
+        if replace:
+            start_layer_idx = layer_idx - 1
+            end_layer_idx = layer_idx + len(layers)
+        else:
+            start_layer_idx = layer_idx
+            end_layer_idx = layer_idx + len(layers)
+
+        # Connect new layers
+        input_layer = self.model.layers[start_layer_idx]
+        x = input_layer.output
+        for layer in layers:
+            x = layer(x)
 
         # Reconnect intermediate layers
-        for hidden_layer in self.model.layers[layer_idx + 1:-len(self.model.output)]:
+        for hidden_layer in self.model.layers[end_layer_idx:-len(self.model.output)]:
             x = hidden_layer(x)
         # Reconnect output layers
         outputs = []
@@ -156,13 +168,59 @@ class Network:
 
         return keras.models.Model(self.model.input, outputs)
 
-    def wider(self, layer):
+    def wider(self, layer, factor=2):
         """
         Adds convolutional filters to a layer and adjusts weights using transfer learning
         :param layer: layer number that will be modified
+        :param factor: value by which number of filters is increased
         :return: A copy of self with the updated layer
         """
-        pass
+        old_layer = self.model.layers[layer]
+        next_layer = self.model.layers[layer + 1]
+        n_filters = old_layer.filters
+        name = old_layer.name + '_wider'
+
+        # Replace old layer with a wider version and reconnect the graph
+        modified_layer = keras.layers.Conv2D(n_filters*factor, kernel_size=old_layer.kernel_size,
+                                             strides=old_layer.strides,
+                                             padding='same',
+                                             activation=old_layer.activation,
+                                             name=name)
+        modified_next_layer = keras.layers.Conv2D(next_layer.filters, kernel_size=next_layer.kernel_size,
+                                                  strides=next_layer.strides,
+                                                  padding=next_layer.padding,
+                                                  activation=next_layer.activation,
+                                                  name=next_layer.name)  # TODO: Take care of the case where next layer is deconvolutional
+        new_model = self.reconnect_model(layer, [modified_layer, modified_next_layer], replace=True)
+
+        # Get weights for knowledge transfer
+        w0, b0 = old_layer.get_weights()
+        w1, b1 = next_layer.get_weights()
+        u0, v0 = new_model.layers[layer].get_weights()
+        u1, v1 = new_model.layers[layer + 1].get_weights()
+
+        # Copy the original filters
+        u0[:, :, :, :n_filters] = w0
+        v0[:n_filters] = b0
+        u1[:, :, :n_filters, :] = w1
+
+        # Select which original filters will be used for the new ones and copy them
+        g = np.random.choice(n_filters, size=(n_filters*factor - n_filters))  # g function from the paper
+        u0[:, :, :, n_filters:] = w0[:, :, :, g]
+        v0[n_filters:] = b0[g]
+        u1[:, :, n_filters:, :] = w1[:, :, g, :]
+
+        # Normalize each new filter of (layer + 1) by how many times the source filter has been selected
+        source = np.concatenate((np.arange(n_filters, dtype=np.int), g))
+        counts = np.bincount(source)
+        norm = counts[source]
+        u1 = np.swapaxes(np.swapaxes(u1, 2, 3)/norm, 2, 3)
+
+        # Update changes into model
+        new_model.layers[layer].set_weights([u0, v0])
+        new_model.layers[layer + 1].set_weights([u1, v1])
+
+        return Network(model=new_model)
 
     def deeper(self, layer):
         """
@@ -183,7 +241,8 @@ class Network:
                                         kernel_initializer='zeros',
                                         bias_initializer='zeros',
                                         name=new_name)
-        new_model = self.insert_layer(layer, new_layer)
+        # new_model = self.insert_tensor(layer, x)
+        new_model = self.reconnect_model(layer, [new_layer])
 
         w, b = new_model.layers[layer + 1].get_weights()
         center_row = int(kernel_size[0]/2.)
