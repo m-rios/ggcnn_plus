@@ -186,8 +186,12 @@ class Network:
         """
         old_layer = self.model.layers[layer]
         next_layer = self.model.layers[layer + 1]
+        next_layer_type = type(next_layer).__name__
+        next_conv = next_layer_type == 'Conv2D'
         n_filters = old_layer.filters
         name = old_layer.name + '_wider'
+
+        assert next_layer_type == 'Conv2D' or next_layer_type == 'Conv2DTranspose'
 
         # Replace old layer with a wider version and reconnect the graph
         modified_layer = keras.layers.Conv2D(n_filters*factor, kernel_size=old_layer.kernel_size,
@@ -195,11 +199,19 @@ class Network:
                                              padding='same',
                                              activation=old_layer.activation,
                                              name=name)
-        modified_next_layer = keras.layers.Conv2D(next_layer.filters, kernel_size=next_layer.kernel_size,
-                                                  strides=next_layer.strides,
-                                                  padding=next_layer.padding,
-                                                  activation=next_layer.activation,
-                                                  name=next_layer.name)  # TODO: Take care of the case where next layer is deconvolutional
+        if next_conv:
+            modified_next_layer = keras.layers.Conv2D(next_layer.filters, kernel_size=next_layer.kernel_size,
+                                                      strides=next_layer.strides,
+                                                      padding=next_layer.padding,
+                                                      activation=next_layer.activation,
+                                                      name=next_layer.name)
+        else:
+            modified_next_layer = keras.layers.Conv2DTranspose(next_layer.filters, kernel_size=next_layer.kernel_size,
+                                                               strides=next_layer.strides,
+                                                               padding=next_layer.padding,
+                                                               activation=next_layer.activation,
+                                                               name=next_layer.name)
+
         new_model = self.reconnect_model(layer, [modified_layer, modified_next_layer], replace=True)
 
         # Get weights for knowledge transfer
@@ -211,19 +223,28 @@ class Network:
         # Copy the original filters
         u0[:, :, :, :n_filters] = w0
         v0[:n_filters] = b0
-        u1[:, :, :n_filters, :] = w1
+        if next_conv:
+            u1[:, :, :n_filters, :] = w1
+        else:
+            u1[:, :, :, :n_filters] = w1
 
         # Select which original filters will be used for the new ones and copy them
         g = np.random.choice(n_filters, size=(n_filters*factor - n_filters))  # g function from the paper
         u0[:, :, :, n_filters:] = w0[:, :, :, g]
         v0[n_filters:] = b0[g]
-        u1[:, :, n_filters:, :] = w1[:, :, g, :]
+        if next_conv:
+            u1[:, :, n_filters:, :] = w1[:, :, g, :]
+        else:
+            u1[:, :, :, n_filters:] = w1[:, :, :, g]
 
         # Normalize each new filter of (layer + 1) by how many times the source filter has been selected
         source = np.concatenate((np.arange(n_filters, dtype=np.int), g))
         counts = np.bincount(source)
-        norm = counts[source]
-        u1 = np.swapaxes(np.swapaxes(u1, 2, 3)/norm, 2, 3)
+        norm = counts[source].astype(np.float64)
+        if next_conv:
+            u1 = np.swapaxes(np.swapaxes(u1, 2, 3)/norm, 2, 3)
+        else:
+            u1 = u1 / norm
 
         # Update changes into model
         new_model.layers[layer].set_weights([u0, v0])

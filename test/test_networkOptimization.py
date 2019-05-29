@@ -10,6 +10,7 @@ class TestNetworkOptimization(TestCase):
         op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5')
         children, scores, actions = op.expand(node)
         self.assertTrue(len(children) == 6)
+        self.assertTrue((actions == ['deeper_conv_1', 'wider_conv_1', 'deeper_conv_2', 'wider_conv_2', 'deeper_conv_3', 'wider_conv_3']))
 
     def test_evaluate(self):
         node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
