@@ -5,6 +5,7 @@ from skimage.filters import gaussian
 from skimage.transform import rescale, resize
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 
 def calculate_iou_matches(grasp_positions_out, grasp_angles_out, ground_truth_bbs, no_grasps=1, grasp_width_out=None, min_iou=0.25):
@@ -270,7 +271,7 @@ class Network:
         assert (np.mod(kernel_size, 2) == 1).all()
         n_filters = input_layer.filters
         activation = input_layer.activation
-        new_name = input_layer.name + '_deeper'
+        new_name = input_layer.name + '_deeper_{}'.format(time.time())
 
         new_layer = keras.layers.Conv2D(n_filters, kernel_size=kernel_size, padding='same', activation=activation,
                                         kernel_initializer='zeros',
