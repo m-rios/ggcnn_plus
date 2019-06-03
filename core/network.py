@@ -161,21 +161,23 @@ class Network:
             start_layer_idx = layer_idx
             end_layer_idx = layer_idx + len(layers)
 
+        temp_model = self.copy_model()
+
         # Connect new layers
-        input_layer = self.model.layers[start_layer_idx]
+        input_layer = temp_model.layers[start_layer_idx]
         x = input_layer.output
         for layer in layers:
             x = layer(x)
 
         # Reconnect intermediate layers
-        for hidden_layer in self.model.layers[end_layer_idx:-len(self.model.output)]:
+        for hidden_layer in temp_model.layers[end_layer_idx:-len(temp_model.outputs)]:
             x = hidden_layer(x)
         # Reconnect output layers
         outputs = []
-        for output_layer in self.model.layers[-len(self.model.output):]:
+        for output_layer in temp_model.layers[-len(temp_model.outputs):]:
             outputs.append(output_layer(x))
 
-        return keras.models.Model(self.model.input, outputs)
+        return keras.models.Model(temp_model.input, outputs)
 
     def wider(self, layer, factor=2):
         """
@@ -219,6 +221,7 @@ class Network:
         w1, b1 = next_layer.get_weights()
         u0, v0 = new_model.layers[layer].get_weights()
         u1, v1 = new_model.layers[layer + 1].get_weights()
+        u1 = u1.astype(np.float64)  # TODO: might not be needed
 
         # Copy the original filters
         u0[:, :, :, :n_filters] = w0
@@ -239,7 +242,9 @@ class Network:
 
         # Normalize each new filter of (layer + 1) by how many times the source filter has been selected
         source = np.concatenate((np.arange(n_filters, dtype=np.int), g))
+        print 'source: {}'.format(source)
         counts = np.bincount(source)
+        print 'counts: {}'.format(counts)
         norm = counts[source].astype(np.float64)
         if next_conv:
             u1 = np.swapaxes(np.swapaxes(u1, 2, 3)/norm, 2, 3)

@@ -36,12 +36,12 @@ class NetworkOptimization(BeamSearch):
         actions = []
 
         # TODO: train children for 10 epochs
-        for layer_idx in node.conv_layer_idxs[:-1]:
+        for layer_idx in node.conv_layer_idxs:
             deeper = node.deeper(layer_idx)
             wider = node.wider(layer_idx)
             children += [deeper, wider]
             scores += [self.evaluate(deeper), self.evaluate(wider)]
-            actions += ['deeper_conv_'.format(layer_idx), 'wider_conv_'.format(layer_idx)]
+            actions += ['deeper_conv_{}'.format(layer_idx), 'wider_conv_{}'.format(layer_idx)]
 
         return children, scores, actions
 
