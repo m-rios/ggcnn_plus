@@ -3,6 +3,7 @@ from ggcnn.dataset_processing.grasp import detect_grasps
 from ggcnn.dataset_processing.grasp import BoundingBoxes, BoundingBox
 from skimage.filters import gaussian
 from skimage.transform import rescale, resize
+from utils.dataset import DatasetGenerator
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -243,9 +244,9 @@ class Network:
 
         # Normalize each new filter of (layer + 1) by how many times the source filter has been selected
         source = np.concatenate((np.arange(n_filters, dtype=np.int), g))
-        print 'source: {}'.format(source)
-        counts = np.bincount(source)
-        print 'counts: {}'.format(counts)
+        # print 'source: {}'.format(source)  # TODO: remove prints
+        counts = np.bincount(source)  # TODO: remove prints
+        # print 'counts: {}'.format(counts)
         norm = counts[source].astype(np.float64)
         if next_conv:
             u1 = np.swapaxes(np.swapaxes(u1, 2, 3)/norm, 2, 3)
@@ -255,6 +256,7 @@ class Network:
         # Update changes into model
         new_model.layers[layer].set_weights([u0, v0])
         new_model.layers[layer + 1].set_weights([u1, v1])
+        new_model.compile(optimizer='rmsprop', loss='mean_squared_error')
 
         return Network(model=new_model)
 
@@ -286,6 +288,7 @@ class Network:
         for f in range(n_filters):
             w[center_row, center_col, f, f] = 1.
         new_model.layers[layer + 1].set_weights([w, b])
+        new_model.compile(optimizer='rmsprop', loss='mean_squared_error')
 
         return Network(model=new_model)
 
@@ -328,6 +331,17 @@ class Network:
         width = model_output[3] * 150.
 
         return position, angle, width
+
+    def train(self, train_generator, batch_sz, n_epochs, verbose=1, callbacks=None, test_generator=None):
+        validation_steps = None if test_generator is None else test_generator.n_samples // batch_sz
+        self.model.fit_generator(generator=train_generator,
+                                 steps_per_epoch=train_generator.n_samples // batch_sz,
+                                 epochs=n_epochs,
+                                 verbose=verbose,
+                                 validation_data=test_generator,
+                                 validation_steps=validation_steps,
+                                 shuffle=True,
+                                 callbacks=callbacks)
 
 
 if __name__ == '__main__':

@@ -3,6 +3,7 @@ Class to easily handle Jacquard dataset
 """
 from skimage import io
 from ggcnn.dataset_processing.grasp import BoundingBoxes, Grasp
+from keras.utils import Sequence
 
 import glob
 import os
@@ -10,6 +11,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
+
 
 def subsample(dataset_fn, ratio):
     """
@@ -28,6 +30,35 @@ def subsample(dataset_fn, ratio):
         path = subset + '/depth_inpainted'
         for img_idx in range(output_ds[path].shape[0]):
             output_ds[path][img_idx] = net.subsample(output_ds[path][img_idx], ratio)
+
+
+class DatasetGenerator(Sequence):
+    def __init__(self, path, batch_sz, dataset='train'):
+        self.ds = h5py.File(path, 'r')[dataset]
+        self.n_samples = self.ds['img_id'].size
+        self.batch_sz = batch_sz
+
+    def __len__(self):
+        return np.ceil(self.n_samples/float(self.batch_sz))
+
+    def __getitem__(self, idx):
+
+        fr = idx*self.batch_sz
+        to = (idx+1)*self.batch_sz
+
+        depth = np.expand_dims(np.array(self.ds['depth_inpainted'][fr:to]), -1)
+        point = np.expand_dims(np.array(self.ds['grasp_points_img'][fr:to]), -1)
+        angle = np.array(self.ds['angle_img'][fr:to])
+        cos = np.expand_dims(np.cos(2*angle), -1)
+        sin = np.expand_dims(np.sin(2*angle), -1)
+        grasp_width = np.expand_dims(np.array(self.ds['grasp_width'][fr:to]), -1)
+        grasp_width = np.clip(grasp_width, 0, 150)/150.0
+
+        batch_x = depth
+        batch_y = [point, cos, sin, grasp_width]
+
+        return batch_x, batch_y
+
 
 class Jacquard:
 

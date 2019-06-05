@@ -2,17 +2,19 @@ import h5py
 import core.network as net
 
 from utils.beam_search import BeamSearch
+from utils.dataset import DatasetGenerator
 
 
 class NetworkOptimization(BeamSearch):
 
-    def __init__(self, eval_method, dataset_fn, min_iou=0.25, debug=False):
+    def __init__(self, eval_method, dataset_fn, min_iou=0.25, debug=False, epochs=10, batch_sz=4):
         """
         Optimize GGCNN using Beam Search
         :param eval_method: string indicating method to use for evaluation. Either 'sim' or 'iou'
         :param dataset_fn: path to the hdf5 dataset used for the evaluation
         :param min_iou: minimum iou value to consider a grasp successful (used for iou evaluation only)
         :param debug: if set to True algorithm will be verbose
+        :param epochs: number of epochs to retrain the expanded models for
         """
         assert eval_method == 'iou' or eval_method == 'sim'
 
@@ -20,6 +22,10 @@ class NetworkOptimization(BeamSearch):
         self.min_iou = min_iou
         self.dataset_fn = dataset_fn
         self._dataset = h5py.File(self.dataset_fn, 'r')
+        self.train_generator = DatasetGenerator(dataset_fn, batch_sz, 'train')
+        self.test_generator = DatasetGenerator(dataset_fn, batch_sz, 'test')
+        self.epochs = epochs
+        self.batch_sz = batch_sz
 
         if self.eval_method == 'iou':
             self.scenes = self._dataset['test']['img_id'][:]
@@ -35,10 +41,11 @@ class NetworkOptimization(BeamSearch):
         scores = []
         actions = []
 
-        # TODO: train children for 10 epochs
         for layer_idx in node.conv_layer_idxs:
             deeper = node.deeper(layer_idx)
+            deeper.train(self.train_generator, self.batch_sz, self.epochs, verbose=1)
             wider = node.wider(layer_idx)
+            wider.train(self.train_generator, self.batch_sz, self.epochs, verbose=1)
             children += [deeper, wider]
             scores += [self.evaluate(deeper), self.evaluate(wider)]
             actions += ['deeper_conv_{}'.format(layer_idx), 'wider_conv_{}'.format(layer_idx)]

@@ -1,5 +1,6 @@
 from unittest import TestCase
 from core.network import Network
+from utils.dataset import DatasetGenerator
 import numpy as np
 import keras
 
@@ -99,3 +100,11 @@ class TestNetwork(TestCase):
         network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
         layers = network.conv_layer_idxs
         self.assertTrue([1, 2, 3] == layers)
+
+    def test_train(self):
+        network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        train_generator = DatasetGenerator('../data/datasets/preprocessed/jacquard_samples.hdf5', 4)
+        network.train(train_generator, 4, 2)
+        network.train(train_generator, 4, 0)
+
+

@@ -24,6 +24,16 @@ class TestNetworkOptimization(TestCase):
 
     def test_run(self):
         node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
-        op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5')
+        op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5', epochs=1, debug=True)
         [nodes, scores, actions] = op.run(node)
-        pass
+        print 'Nodes: {}'.format(nodes)
+        print 'Scores: {}'.format(scores)
+        print 'Actions: {}'.format(actions)
+
+    def test_run_short(self):
+        node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5', epochs=0, debug=True)
+        [nodes, scores, actions] = op.run(node)
+        print 'Nodes: {}'.format(nodes)
+        print 'Scores: {}'.format(scores)
+        print 'Actions: {}'.format(actions)
