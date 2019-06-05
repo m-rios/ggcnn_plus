@@ -5,12 +5,14 @@ import numpy as np
 class BeamSearch:
     __metaclass__ = ABCMeta
 
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, log_fn=None):
         import logging
         self.log = logging
         level = self.log.DEBUG if debug else self.log.INFO
         fmt = "[%(levelname)s]: [%(asctime)s]: %(funcName)s():%(lineno)i: %(message)s"
         self.log.basicConfig(level=level, format=fmt)
+        if log_fn is not None:
+            self.log.getLogger().addHandler(logging.FileHandler(filename=log_fn))
 
         super(BeamSearch, self).__init__()
 

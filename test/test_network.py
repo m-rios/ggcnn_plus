@@ -100,11 +100,19 @@ class TestNetwork(TestCase):
         network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
         layers = network.conv_layer_idxs
         self.assertTrue([1, 2, 3] == layers)
+        deeper = network.deeper(3)
+        layers2 = deeper.conv_layer_idxs
+        self.assertTrue(layers2 == [1, 2, 3, 4])
 
     def test_train(self):
         network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
         train_generator = DatasetGenerator('../data/datasets/preprocessed/jacquard_samples.hdf5', 4)
         network.train(train_generator, 4, 2)
         network.train(train_generator, 4, 0)
+
+    def test_str(self):
+        network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        self.assertTrue(str(network) == '9x9x32_5x5x16_3x3x8')
+
 
 

@@ -125,6 +125,13 @@ class Network:
         else:
             raise ValueError('Either model_fn or model must be provided')
 
+    def __str__(self):
+        fields = []
+        for layer_idx in self.conv_layer_idxs:
+            layer = self.model.layers[layer_idx]
+            fields.append('x'.join(map(str, layer.kernel_size + (layer.filters,))))
+        return '_'.join(fields)
+
     @property
     def height(self):
         return self.model.input.shape[1]
