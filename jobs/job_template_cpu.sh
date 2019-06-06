@@ -7,7 +7,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=m.rios.munoz@student.rug.nl
 
-source ~/.ml_cpu
+source ~/msc-thesis/jobs/.ml_cpu.sh
 source ~/msc-thesis/.cpu/bin/activate
 cd ~/msc-thesis
 python -c "import keras"

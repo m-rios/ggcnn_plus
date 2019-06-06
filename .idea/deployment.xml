@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always">
+  <component name="PublishConfigData" autoUpload="Always" showNewOnSourceInSync="false">
     <serverData>
       <paths name="Peregrine">
         <serverdata>
@@ -11,6 +11,8 @@
             <excludedPath local="true" path="$PROJECT_DIR$/.venv" />
             <excludedPath path="msc-thesis/.cpu" />
             <excludedPath path="/home/s3485781/msc-thesis/.gpu" />
+            <excludedPath local="true" path="$PROJECT_DIR$/data/datasets" />
+            <excludedPath path="msc-thesis/.gpu" />
           </excludedPaths>
         </serverdata>
       </paths>

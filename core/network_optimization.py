@@ -57,9 +57,9 @@ class NetworkOptimization(BeamSearch):
             deeper = node.deeper(layer_idx)
             wider = node.wider(layer_idx)
             self.log.info('Training {}'.format(deeper))
-            # deeper.train(self.train_generator, self.batch_sz, self.epochs, verbose=1)
+            deeper.train(self.train_generator, self.batch_sz, self.epochs, verbose=0)
             self.log.info('Training {}'.format(wider))
-            # wider.train(self.train_generator, self.batch_sz, self.epochs, verbose=1)
+            wider.train(self.train_generator, self.batch_sz, self.epochs, verbose=0)
             children += [deeper, wider]
             scores += [self.evaluate(deeper), self.evaluate(wider)]
             actions += ['deeper_conv_{}'.format(layer_idx), 'wider_conv_{}'.format(layer_idx)]

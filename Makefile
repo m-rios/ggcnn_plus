@@ -11,7 +11,7 @@ VIRTUALENV := /usr/bin/virtualenv
 
 REQUIREMENTS := -r requirements.txt
 
-DEPENDENCIES := ggcnn simulator
+DEPENDENCIES := ggcnn simulator core utils
 
 init:
 	$(VIRTUALENV) $(VENV)
