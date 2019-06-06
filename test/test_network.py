@@ -57,16 +57,14 @@ class TestNetwork(TestCase):
         hidden1 = m1.layers[layer + 1](m1.layers[layer].output)
         hidden2 = m2.layers[layer + 1](m2.layers[layer].output)
 
-        mh1 = keras.models.Model(m1.input, hidden1)
-        mh2 = keras.models.Model(m2.input, hidden2)
+        mh1 = keras.models.Model(m1.layers[0].output, hidden1)
+        mh2 = keras.models.Model(m2.layers[0].output, hidden2)
 
         o1 = mh1.predict(input_img)
         o2 = mh2.predict(input_img)
 
         for i in range(o1.shape[3]):
             print i, np.amax(np.abs(o1[:,:,:,i] - o2[:,:,:,i]))
-
-        pass
 
     def test_wider_on_smaller_network(self):
         input =  np.reshape(np.array([[7, 8, 9],
@@ -83,18 +81,21 @@ class TestNetwork(TestCase):
         network = Network(model=model)
         network2 = network.wider(1)
 
+        model2 = network2.copy_model()
+
         # Hidden outputs
-        modelh1 = keras.models.Model(i, model.layers[2](model.layers[1].output))
-        modelh2 = keras.models.Model(i, network2.model.layers[2](network2.model.layers[1].output))
+        modelh1 = keras.models.Model(model.layers[0].output, model.layers[2].output)
+        modelh2 = keras.models.Model(model2.layers[0].output, model2.layers[2].output)
 
         hidden1 = modelh1.predict(input)
         hidden2 = modelh2.predict(input)
-        print hidden1
-        print hidden2
-        # print np.moveaxis(hidden2, [0, 1, 2, 3], [2, 3, 0, 1])
-        print (hidden1 == hidden2).all()
 
-        self.assertTrue((network.model.predict(input) == network2.model.predict(input)).all())
+        self.assertTrue((np.round(hidden1, 3) == np.round(hidden2, 3)).all())
+
+        final1 = model.predict(input)
+        final2 = model2.predict(input)
+
+        self.assertTrue((np.round(final1, 3) == np.round(final2, 3)).all())
 
     def test_conv_layer_idxs(self):
         network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
