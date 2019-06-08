@@ -3,7 +3,6 @@ from ggcnn.dataset_processing.grasp import detect_grasps
 from ggcnn.dataset_processing.grasp import BoundingBoxes, BoundingBox
 from skimage.filters import gaussian
 from skimage.transform import rescale, resize
-from utils.dataset import DatasetGenerator
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -117,6 +116,7 @@ def subsample(image, factor=0.5):
 
 
 class Network:
+
     def __init__(self, model_fn=None, model=None):
         self.epoch = None
 
@@ -281,7 +281,7 @@ class Network:
         """
         temp_model = self.copy_model()
         input_layer = temp_model.layers[layer]
-        assert type(input_layer).__name__ == 'Conv2D'
+        assert type(input_layer).__name__ in ['Conv2D', 'Conv2DTranspose']
         kernel_size = input_layer.kernel_size
         assert (np.mod(kernel_size, 2) == 1).all()
         n_filters = input_layer.filters
@@ -292,7 +292,6 @@ class Network:
                                         kernel_initializer='zeros',
                                         bias_initializer='zeros',
                                         name=new_name)
-        # new_model = self.insert_tensor(layer, x)
         new_model = self.reconnect_model(layer, [new_layer])
 
         w, b = new_model.layers[layer + 1].get_weights()

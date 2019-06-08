@@ -9,14 +9,18 @@ class TestNetwork(TestCase):
     def test_deeper(self):
         network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
         network2 = network.deeper(layer=2)
+        network3 = network.deeper(layer=5)
         input_img = np.expand_dims(np.load('depth_inpainted.npy'), axis=2)
         input_img = np.expand_dims(input_img, axis=0)
         output1 = network.predict(input_img)
         output2 = network2.predict(input_img)
+        output3 = network3.predict(input_img)
 
         self.assertTrue(len(network.model.layers) == len(network2.model.layers) - 1)
-        for o1, o2 in zip(output1, output2):
+        for o1, o2, o3 in zip(output1, output2, output3):
             self.assertTrue((o1 == o2).all())
+            self.assertTrue((o3 == o2).all())
+            self.assertTrue((o1 == o3).all())
 
     def test_wider(self):
         layer = 1
