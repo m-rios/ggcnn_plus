@@ -9,7 +9,7 @@ from utils.dataset import DatasetGenerator
 
 class NetworkOptimization(BeamSearch):
 
-    def __init__(self, eval_method, dataset_fn, min_iou=0.25, debug=False, epochs=10, batch_sz=4, results_path='.'):
+    def __init__(self, eval_method, dataset_fn, min_iou=0.25, debug=False, epochs=10, batch_sz=4, results_path='.', retrain_epochs=0):
         """
         Optimize GGCNN using Beam Search
         :param eval_method: string indicating method to use for evaluation. Either 'sim' or 'iou'
@@ -29,6 +29,7 @@ class NetworkOptimization(BeamSearch):
         self.test_generator = DatasetGenerator(dataset_fn, batch_sz, 'test')
         self.epochs = epochs
         self.batch_sz = batch_sz
+        self.retrain_epochs = retrain_epochs
 
         self.current_depth = 0
 
@@ -46,7 +47,8 @@ class NetworkOptimization(BeamSearch):
         self.log.info("""
         ARCHITECTURE OPTIMIZATION PARAMETERS
         ====================================\n\neval_method: {}\ndataset_fn: {}\nmin_iou: {}
-        epochs: {}\nbatch_sz={}\n\n""".format(eval_method, dataset_fn, min_iou, epochs, batch_sz))
+        epochs: {}\nretrain_epochs: {}\nbatch_sz={}\n\n""".format(eval_method, dataset_fn, min_iou, epochs,
+                                                                  retrain_epochs, batch_sz))
 
     def expand(self, node):
         children = []
@@ -93,6 +95,7 @@ class NetworkOptimization(BeamSearch):
         return result
 
     def post_lookahead(self, node):
+        node.train(self.train_generator, self.batch_sz, self.retrain_epochs, verbose=0)
         name = 'arch_{}_depth_{}_model.hdf5'.format(node, self.current_depth)
         node.model.save(os.path.join(self.results_path, name))
         self.current_depth += 1

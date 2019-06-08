@@ -13,6 +13,7 @@
             <excludedPath path="/home/s3485781/msc-thesis/.gpu" />
             <excludedPath local="true" path="$PROJECT_DIR$/data/datasets" />
             <excludedPath path="msc-thesis/.gpu" />
+            <excludedPath local="true" path="$PROJECT_DIR$/test/depth_inpainted.npy" />
           </excludedPaths>
         </serverdata>
       </paths>
