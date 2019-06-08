@@ -20,12 +20,12 @@ import numpy as np
 from simulator.simulator import Simulator, VIDEO_LOGGER, STATE_LOGGER
 import network as net
 
+
 def print_attrs(scenes, f):
     f.write('SCENES ATTRS:\n')
     for item in scenes.attrs.items():
         f.write('{}: {}\n'.format(item[0], item[1]))
     f.write('---\n')
-
 
 
 if __name__ == '__main__':

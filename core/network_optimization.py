@@ -93,7 +93,7 @@ class NetworkOptimization(BeamSearch):
         return result
 
     def post_lookahead(self, node):
-        name = 'depth_{}_arch_{}.hdf5'.format(self.current_depth, node)
+        name = 'arch_{}_depth_{}_model.hdf5'.format(node, self.current_depth)
         node.model.save(os.path.join(self.results_path, name))
         self.current_depth += 1
         return node

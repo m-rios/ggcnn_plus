@@ -118,10 +118,16 @@ def subsample(image, factor=0.5):
 
 class Network:
     def __init__(self, model_fn=None, model=None):
+        self.epoch = None
+
         if model is not None:
             self.model = model
         elif model_fn is not None:
             self.model = keras.models.load_model(model_fn)
+            try:
+                self.epoch = int(model_fn.split('_')[-2])
+            except ValueError:
+                print('Unable to extract epoch from model filename. Falling back to default value of None')
         else:
             raise ValueError('Either model_fn or model must be provided')
 
