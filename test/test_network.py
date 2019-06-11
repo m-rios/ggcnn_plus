@@ -24,12 +24,15 @@ class TestNetwork(TestCase):
 
     def test_wider(self):
         layer = 1
+        layer2 = 4
         network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
         network2 = network.wider(layer=layer)
+        network3 = network.wider(layer=layer2)
         input_img = np.expand_dims(np.load('depth_inpainted.npy'), axis=2)
         input_img = np.expand_dims(input_img, axis=0)
         output1 = network.predict(input_img)
         output2 = network2.predict(input_img)
+        output3 = network3.predict(input_img)
 
         self.assertTrue(len(network2.model.layers) == len(network.model.layers))
         self.assertTrue(network2.model.layers[layer].filters == network.model.layers[layer].filters*2)
@@ -37,10 +40,12 @@ class TestNetwork(TestCase):
 
         import pylab as plt
         plt.figure()
-        plt.subplot(1, 2, 1)
+        plt.subplot(1, 3, 1)
         plt.imshow(output1[0].squeeze())
-        plt.subplot(1, 2, 2)
+        plt.subplot(1, 3, 2)
         plt.imshow(output2[0].squeeze())
+        plt.subplot(1, 3, 3)
+        plt.imshow(output3[0].squeeze())
         plt.show()
 
         self.assertTrue(len(network.model.layers) == len(network2.model.layers))
@@ -109,6 +114,16 @@ class TestNetwork(TestCase):
         layers2 = deeper.conv_layer_idxs
         self.assertTrue(layers2 == [1, 2, 3, 4])
 
+    def test_get_expandable_layer_idxs(self):
+        network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        layers = network.get_expandable_layer_idxs()
+        self.assertTrue([1, 2, 3] == layers)
+        deeper = network.deeper(3)
+        layers2 = deeper.conv_layer_idxs
+        self.assertTrue(layers2 == [1, 2, 3, 4])
+        layers = network.get_expandable_layer_idxs(transpose=True)
+        self.assertTrue([1, 2, 3, 4, 5, 6] == layers)
+
     def test_train(self):
         network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
         train_generator = DatasetGenerator('../data/datasets/preprocessed/jacquard_samples.hdf5', 4)
@@ -117,7 +132,7 @@ class TestNetwork(TestCase):
 
     def test_str(self):
         network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
-        self.assertTrue(str(network) == '9x9x32_5x5x16_3x3x8')
+        self.assertTrue(str(network) == 'C9x9x32_C5x5x16_C3x3x8_T3x3x8_T5x5x16_T9x9x32')
 
 
 

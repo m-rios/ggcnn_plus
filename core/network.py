@@ -133,9 +133,10 @@ class Network:
 
     def __str__(self):
         fields = []
-        for layer_idx in self.conv_layer_idxs:
+        for layer_idx in self.get_expandable_layer_idxs(transpose=True):
             layer = self.model.layers[layer_idx]
-            fields.append('x'.join(map(str, layer.kernel_size + (layer.filters,))))
+            prefix = 'C' if type(layer).__name__ == 'Conv2D' else 'T'
+            fields.append(prefix + 'x'.join(map(str, layer.kernel_size + (layer.filters,))))
         return '_'.join(fields)
 
     @property
@@ -152,6 +153,14 @@ class Network:
         The indices of the hidden convolutional layers in the model
         """
         conv_layers = filter(lambda x: type(x[1]).__name__ == 'Conv2D', enumerate(self.model.layers))
+        conv_layers = conv_layers[:-len(self.model.output)]
+        return list(zip(*conv_layers)[0])
+
+    def get_expandable_layer_idxs(self, transpose=False):
+        valid_types = ['Conv2D']
+        if transpose:
+            valid_types.append('Conv2DTranspose')
+        conv_layers = filter(lambda x: type(x[1]).__name__ in valid_types, enumerate(self.model.layers))
         conv_layers = conv_layers[:-len(self.model.output)]
         return list(zip(*conv_layers)[0])
 
@@ -202,20 +211,30 @@ class Network:
         :return: A copy of self with the updated layer
         """
         old_layer = self.model.layers[layer]
+        old_layer_type = type(old_layer).__name__
+        old_conv = old_layer_type == 'Conv2D'
         next_layer = self.model.layers[layer + 1]
         next_layer_type = type(next_layer).__name__
         next_conv = next_layer_type == 'Conv2D'
         n_filters = old_layer.filters
         name = old_layer.name + '_wider'
 
+        assert old_layer_type == 'Conv2D' or next_layer_type == 'Conv2DTranspose'
         assert next_layer_type == 'Conv2D' or next_layer_type == 'Conv2DTranspose'
 
         # Replace old layer with a wider version and reconnect the graph
-        modified_layer = keras.layers.Conv2D(n_filters*factor, kernel_size=old_layer.kernel_size,
-                                             strides=old_layer.strides,
-                                             padding='same',
-                                             activation=old_layer.activation,
-                                             name=name)
+        if old_conv:
+            modified_layer = keras.layers.Conv2D(n_filters*factor, kernel_size=old_layer.kernel_size,
+                                                 strides=old_layer.strides,
+                                                 padding='same',
+                                                 activation=old_layer.activation,
+                                                 name=name)
+        else:
+            modified_layer = keras.layers.Conv2DTranspose(n_filters*factor, kernel_size=old_layer.kernel_size,
+                                                 strides=old_layer.strides,
+                                                 padding='same',
+                                                 activation=old_layer.activation,
+                                                 name=name)
         if next_conv:
             modified_next_layer = keras.layers.Conv2D(next_layer.filters, kernel_size=next_layer.kernel_size,
                                                       strides=next_layer.strides,
@@ -239,7 +258,11 @@ class Network:
         u1 = u1.astype(np.float64)  # TODO: might not be needed
 
         # Copy the original filters
-        u0[:, :, :, :n_filters] = w0
+        if old_conv:
+            u0[:, :, :, :n_filters] = w0
+        else:
+            u0[:, :, :n_filters, :] = w0
+
         v0[:n_filters] = b0
         if next_conv:
             u1[:, :, :n_filters, :] = w1
@@ -248,7 +271,10 @@ class Network:
 
         # Select which original filters will be used for the new ones and copy them
         g = np.random.choice(n_filters, size=(n_filters*factor - n_filters))  # g function from the paper
-        u0[:, :, :, n_filters:] = w0[:, :, :, g]
+        if old_conv:
+            u0[:, :, :, n_filters:] = w0[:, :, :, g]
+        else:
+            u0[:, :, n_filters:, :] = w0[:, :, g, :]
         v0[n_filters:] = b0[g]
         if next_conv:
             u1[:, :, n_filters:, :] = w1[:, :, g, :]

@@ -9,7 +9,7 @@ from utils.dataset import DatasetGenerator
 
 class NetworkOptimization(BeamSearch):
 
-    def __init__(self, eval_method, dataset_fn, min_iou=0.25, debug=False, epochs=10, batch_sz=4, results_path='.', retrain_epochs=0):
+    def __init__(self, eval_method, dataset_fn, min_iou=0.25, debug=False, epochs=10, batch_sz=4, results_path='.', retrain_epochs=0, expand_transpose=False):
         """
         Optimize GGCNN using Beam Search
         :param eval_method: string indicating method to use for evaluation. Either 'sim' or 'iou'
@@ -30,6 +30,7 @@ class NetworkOptimization(BeamSearch):
         self.epochs = epochs
         self.batch_sz = batch_sz
         self.retrain_epochs = retrain_epochs
+        self.expand_transpose = expand_transpose
 
         self.current_depth = 0
 
@@ -47,15 +48,17 @@ class NetworkOptimization(BeamSearch):
         self.log.info("""
         ARCHITECTURE OPTIMIZATION PARAMETERS
         ====================================\n\neval_method: {}\ndataset_fn: {}\nmin_iou: {}
-        epochs: {}\nretrain_epochs: {}\nbatch_sz={}\n\n""".format(eval_method, dataset_fn, min_iou, epochs,
-                                                                  retrain_epochs, batch_sz))
+        epochs: {}\nretrain_epochs: {}\nbatch_sz:{}\nexpand_transpose:{}\n\n""".format(eval_method, dataset_fn, min_iou, epochs,
+                                                                  retrain_epochs, batch_sz, expand_transpose))
 
     def expand(self, node):
         children = []
         scores = []
         actions = []
 
-        for layer_idx in node.conv_layer_idxs:
+        for layer_idx in node.get_expandable_layer_idxs(transpose=self.expand_transpose):
+            is_conv = type(node.model.layers[layer_idx]).__name__ == 'Conv2D'
+            prefix = '' if is_conv else 'de'
             deeper = node.deeper(layer_idx)
             wider = node.wider(layer_idx)
             self.log.info('Training {}'.format(deeper))
@@ -64,7 +67,7 @@ class NetworkOptimization(BeamSearch):
             wider.train(self.train_generator, self.batch_sz, self.epochs, verbose=0)
             children += [deeper, wider]
             scores += [self.evaluate(deeper), self.evaluate(wider)]
-            actions += ['deeper_conv_{}'.format(layer_idx), 'wider_conv_{}'.format(layer_idx)]
+            actions += ['deeper_{}conv_{}'.format(prefix, layer_idx), 'wider_{}conv_{}'.format(prefix,layer_idx)]
 
         return children, scores, actions
 
