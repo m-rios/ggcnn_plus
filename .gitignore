@@ -1,7 +1,6 @@
 # Custom ignores
 literature
 download_jacquard.sh # Ignored to avoid exposing url to the public
-scripts/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

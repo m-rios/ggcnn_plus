@@ -10,4 +10,4 @@
 source ~/msc-thesis/jobs/.ml_cpu.sh
 source ~/msc-thesis/.cpu/bin/activate
 cd ~/msc-thesis
-python core/evaluate.py ~/DATA/results/beam_search_190606_1311 --scenes ~/DATA/scenes/shapenet_1.hdf5
+python core/evaluate.py /home/s3485781/DATA/results/beam_search_190608_1643 --scenes ~/DATA/scenes/shapenet_1.hdf5
