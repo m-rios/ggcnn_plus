@@ -16,6 +16,32 @@
                 <Pins />
               </value>
             </entry>
+            <entry>
+              <key>
+                <RunConfigurationRef>
+                  <option name="icon" value="pythonTests.svg" />
+                  <option name="name" value="Unittests for test_networkOptimization.TestNetworkOptimization.test_run_short_transpose" />
+                </RunConfigurationRef>
+              </key>
+              <value>
+                <Pins>
+                  <option name="pins">
+                    <list>
+                      <Pin>
+                        <option name="consoleUUID" value="c3d11300-c2c9-41fc-863a-e554fb6c433a" />
+                        <option name="contentType" value="ConsoleContent" />
+                        <option name="grepModel">
+                          <GrepModel>
+                            <option name="expression" value="expand" />
+                            <option name="unlessExpression" value="" />
+                          </GrepModel>
+                        </option>
+                      </Pin>
+                    </list>
+                  </option>
+                </Pins>
+              </value>
+            </entry>
           </map>
         </option>
       </PinnedGrepConsolesState>

@@ -169,11 +169,11 @@ class Network:
         new_model.set_weights(self.model.get_weights())
         return new_model
 
-    def reconnect_model(self, layer_idx, layers, replace=False):
+    def reconnect_model_original(self, layer_idx, layers, replace=False):
         """
         Reconnects last_layer with the reminder of layers after layer_idx
         :param layer_idx: Index in the model of the first layer to be reconnected
-        :param layers: An ordered list of the layers to be reconnected
+        :param layers: An ordered list of the layers to be reconnected. Layers after the first one are connected to the first one
         :param replace: If True layers will replace existing layers at and bellow layer_idx. If False layers will be added
         bellow layer_idx
         :return: A copy of the reconnected model
@@ -203,7 +203,58 @@ class Network:
 
         return keras.models.Model(temp_model.input, outputs)
 
-    def wider(self, layer, factor=2):
+    def get_connectivity(self, layer_idx=0):
+        """
+        Returns the connectivity of the model
+        :param layer_idx: Layer from which to start retrieving connectivity
+        :return: A list where each element points to the layer with which that element as an inbound connection with
+        """
+        assert len(self.model.layers) > 1, 'Model must have at least 2 layers for this function to be used. Current model only has {}'.format(len(self.model.layers))
+        connectivity = [-1]
+        indexed_layers = zip(range(len(self.model.layers[layer_idx:])), self.model.layers[layer_idx:])
+        for layer in self.model.layers[layer_idx+1:]:
+            inbound = layer._inbound_nodes[0].inbound_layers[0]
+            c, _ = filter(lambda il: il[1] is inbound, indexed_layers)[0]
+            connectivity.append(c)
+        return connectivity
+
+    def reconnect_model(self, layer_idx, layers, connectivity=None, replace=False):
+        """
+        Reconnects last_layer with the reminder of layers after layer_idx
+        :param layer_idx: Index in the model of the first layer to be reconnected
+        :param layers: An ordered list of the layers to be reconnected. Layers after the first one are connected to the first one
+        :param connectivity: How each layer in layers is connected. If None layers are connected one after the other. An example
+        to connect 2 deeper layers to a shallower one would be connectivity=[-1, 0, 0]
+        :param replace: If True layers will replace existing layers at and bellow layer_idx. If False layers will be added
+        bellow layer_idx
+        :return: A copy of the reconnected model
+        """
+        if replace:
+            start_layer_idx = layer_idx - 1
+            end_layer_idx = layer_idx + len(layers)
+        else:
+            start_layer_idx = layer_idx
+            end_layer_idx = layer_idx + len(layers)
+
+        temp_model = self.copy_model()
+
+        # Get new model connectivity
+        submodel_layers = layers + temp_model.layers[end_layer_idx:]
+        submodel_outputs = [temp_model.layers[start_layer_idx].output]
+        if connectivity is None:
+            connectivity = range(len(layers))
+        else:
+            connectivity = np.add(connectivity, 1).tolist()
+
+        connectivity += np.add(self.get_connectivity(end_layer_idx-1), len(layers))[1:].tolist()
+
+        # Reconnect model
+        for l_idx, layer in enumerate(submodel_layers):
+            submodel_outputs.append(layer(submodel_outputs[connectivity[l_idx]]))
+
+        return keras.models.Model(temp_model.input, submodel_outputs[-4:])
+
+    def wider_orig(self, layer, factor=2):
         """
         Adds convolutional filters to a layer and adjusts weights using transfer learning
         :param layer: layer number that will be modified
@@ -219,7 +270,7 @@ class Network:
         n_filters = old_layer.filters
         name = old_layer.name + '_wider'
 
-        assert old_layer_type == 'Conv2D' or next_layer_type == 'Conv2DTranspose'
+        assert old_layer_type == 'Conv2D' or old_layer_type == 'Conv2DTranspose'
         assert next_layer_type == 'Conv2D' or next_layer_type == 'Conv2DTranspose'
 
         # Replace old layer with a wider version and reconnect the graph
@@ -231,10 +282,10 @@ class Network:
                                                  name=name)
         else:
             modified_layer = keras.layers.Conv2DTranspose(n_filters*factor, kernel_size=old_layer.kernel_size,
-                                                 strides=old_layer.strides,
-                                                 padding='same',
-                                                 activation=old_layer.activation,
-                                                 name=name)
+                                                          strides=old_layer.strides,
+                                                          padding='same',
+                                                          activation=old_layer.activation,
+                                                          name=name)
         if next_conv:
             modified_next_layer = keras.layers.Conv2D(next_layer.filters, kernel_size=next_layer.kernel_size,
                                                       strides=next_layer.strides,
@@ -299,6 +350,115 @@ class Network:
 
         return Network(model=new_model)
 
+    def wider(self, layer, factor=2):
+        """
+        Adds convolutional filters to a layer and adjusts weights using transfer learning
+        :param layer: layer number that will be modified
+        :param factor: value by which number of filters is increased
+        :return: A copy of self with the updated layer
+        """
+        old_layer = self.model.layers[layer]
+        old_layer_type = type(old_layer).__name__
+        old_conv = old_layer_type == 'Conv2D'
+        n_filters = old_layer.filters
+        name = old_layer.name + '_wider'
+
+        next_layers, next_layers_type = zip(*[(node.outbound_layer, type(node.outbound_layer).__name__) for node in old_layer._outbound_nodes])
+
+        assert old_layer_type == 'Conv2D' or old_layer_type == 'Conv2DTranspose'
+
+        # Replace old layer with a wider version and reconnect the graph
+        modified_layers = []
+        connectivity = [-1]
+        if old_conv:
+            modified_layers.append(keras.layers.Conv2D(n_filters*factor, kernel_size=old_layer.kernel_size,
+                                                       strides=old_layer.strides,
+                                                       padding='same',
+                                                       activation=old_layer.activation,
+                                                       name=name))
+        else:
+            modified_layers.append(keras.layers.Conv2DTranspose(n_filters*factor, kernel_size=old_layer.kernel_size,
+                                                                strides=old_layer.strides,
+                                                                padding='same',
+                                                                activation=old_layer.activation,
+                                                                name=name))
+        for next_layer_idx, next_layer in enumerate(next_layers):
+            connectivity.append(0)
+            if next_layers_type[next_layer_idx] == 'Conv2D':
+                modified_layers.append(keras.layers.Conv2D(next_layer.filters, kernel_size=next_layer.kernel_size,
+                                                           strides=next_layer.strides,
+                                                           padding=next_layer.padding,
+                                                           activation=next_layer.activation,
+                                                           name=next_layer.name))
+            elif next_layers_type[next_layer_idx] == 'Conv2DTranspose':
+                modified_layers.append(keras.layers.Conv2DTranspose(next_layer.filters, kernel_size=next_layer.kernel_size,
+                                                                    strides=next_layer.strides,
+                                                                    padding=next_layer.padding,
+                                                                    activation=next_layer.activation,
+                                                                    name=next_layer.name))
+            else:
+                raise TypeError('Expected next layer to be either \'Conv2D\' or \'Conv2DTranspose\' but received {} instead'.format(next_layers_type[next_layer_idx]))
+
+        new_model = self.reconnect_model(layer, modified_layers, connectivity=connectivity, replace=True)
+
+        # Widen top layer
+        w0, b0 = old_layer.get_weights()
+        u0, v0 = new_model.layers[layer].get_weights()
+
+        g = np.random.choice(n_filters, size=(n_filters*factor - n_filters))  # g function from the paper
+
+        if old_conv:
+            u0[:, :, :, :n_filters] = w0
+        else:
+            u0[:, :, :n_filters, :] = w0
+
+        v0[:n_filters] = b0
+
+        if old_conv:
+            u0[:, :, :, n_filters:] = w0[:, :, :, g]
+        else:
+            u0[:, :, n_filters:, :] = w0[:, :, g, :]
+        v0[n_filters:] = b0[g]
+
+        new_model.layers[layer].set_weights([u0, v0])  # Update weights
+
+        # To be used in filter normalization
+        source = np.concatenate((np.arange(n_filters, dtype=np.int), g))
+        counts = np.bincount(source)
+        norm = counts[source].astype(np.float64)
+
+        # Widen bottom layer(s)
+        for next_layer_idx, next_layer in enumerate(next_layers):
+            new_next_layer = new_model.layers[layer]._outbound_nodes[next_layer_idx].outbound_layer
+
+            w1, b1 = next_layer.get_weights()
+            u1, v1 = new_next_layer.get_weights()
+            is_conv = next_layers_type[next_layer_idx] == 'Conv2D'
+
+            if is_conv:
+                u1[:, :, :n_filters, :] = w1
+            else:
+                u1[:, :, :, :n_filters] = w1
+
+            if is_conv:
+                u1[:, :, n_filters:, :] = w1[:, :, g, :]
+            else:
+                u1[:, :, :, n_filters:] = w1[:, :, :, g]
+
+            # Normalize each new filter of (layer + 1) by how many times the source filter has been selected
+            if is_conv:
+                u1 = np.swapaxes(np.swapaxes(u1, 2, 3)/norm, 2, 3)
+            else:
+                u1 = u1 / norm
+
+            # Update changes into model
+            new_next_layer.set_weights([u1, v1])
+
+        # Make the model ready for training
+        new_model.compile(optimizer='rmsprop', loss='mean_squared_error')
+
+        return Network(model=new_model)
+
     def deeper(self, layer):
         """
         Adds a new layer and adjusts weights using transfer learning
@@ -307,17 +467,26 @@ class Network:
         """
         temp_model = self.copy_model()
         input_layer = temp_model.layers[layer]
-        assert type(input_layer).__name__ in ['Conv2D', 'Conv2DTranspose']
+        input_layer_type = type(input_layer).__name__
+        assert input_layer_type in ['Conv2D', 'Conv2DTranspose']
+        input_layer_conv = input_layer_type == 'Conv2D'
         kernel_size = input_layer.kernel_size
         assert (np.mod(kernel_size, 2) == 1).all()
         n_filters = input_layer.filters
         activation = input_layer.activation
         new_name = input_layer.name + '_deeper_{}'.format(time.time())
 
-        new_layer = keras.layers.Conv2D(n_filters, kernel_size=kernel_size, padding='same', activation=activation,
-                                        kernel_initializer='zeros',
-                                        bias_initializer='zeros',
-                                        name=new_name)
+        if input_layer_conv:
+            new_layer = keras.layers.Conv2D(n_filters, kernel_size=kernel_size, padding='same', activation=activation,
+                                            kernel_initializer='zeros',
+                                            bias_initializer='zeros',
+                                            name=new_name)
+        else:
+            new_layer = keras.layers.Conv2DTranspose(n_filters, kernel_size=kernel_size, padding='same', activation=activation,
+                                            kernel_initializer='zeros',
+                                            bias_initializer='zeros',
+                                            name=new_name)
+
         new_model = self.reconnect_model(layer, [new_layer])
 
         w, b = new_model.layers[layer + 1].get_weights()

@@ -6,14 +6,14 @@ from core.network import Network
 
 class TestNetworkOptimization(TestCase):
     def test_expand(self):
-        node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        node = Network(model_fn='../data/networks/ggcnn_rss/epoch_29_model.hdf5')
         op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5')
         children, scores, actions = op.expand(node)
         self.assertTrue(len(children) == 6)
         self.assertTrue((actions == ['deeper_conv_1', 'wider_conv_1', 'deeper_conv_2', 'wider_conv_2', 'deeper_conv_3', 'wider_conv_3']))
 
     def test_evaluate(self):
-        node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        node = Network(model_fn='../data/networks/ggcnn_rss/epoch_29_model.hdf5')
         op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5')
         op.min_iou = 0.
         ev1 = op.evaluate(node)
@@ -23,7 +23,7 @@ class TestNetworkOptimization(TestCase):
         self.assertTrue(ev2 == 0)
 
     def test_run(self):
-        node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        node = Network(model_fn='../data/networks/ggcnn_rss/epoch_29_model.hdf5')
         op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5', epochs=1, debug=True)
         [nodes, scores, actions] = op.run(node)
         print 'Nodes: {}'.format(nodes)
@@ -31,9 +31,17 @@ class TestNetworkOptimization(TestCase):
         print 'Actions: {}'.format(actions)
 
     def test_run_short(self):
-        node = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        node = Network(model_fn='../data/networks/ggcnn_rss/epoch_29_model.hdf5')
         op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5', epochs=0, debug=True)
         [nodes, scores, actions] = op.run(node)
+        print 'Nodes: {}'.format(nodes)
+        print 'Scores: {}'.format(scores)
+        print 'Actions: {}'.format(actions)
+
+    def test_run_short_transpose(self):
+        node = Network(model_fn='../data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5', epochs=0, debug=True, expand_transpose=True)
+        [nodes, scores, actions] = op.run(node, depth=1, k=1)
         print 'Nodes: {}'.format(nodes)
         print 'Scores: {}'.format(scores)
         print 'Actions: {}'.format(actions)
