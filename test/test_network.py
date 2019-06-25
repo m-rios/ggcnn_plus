@@ -171,6 +171,8 @@ class TestNetwork(TestCase):
         network3 = Network(model=network.reconnect_model(6, [layer3]))
         self.assertTrue(str(network3) == 'C9x9x32_C5x5x16_C3x3x8_T3x3x8_T5x5x16_T9x9x32_C3x3x32')
 
-
-
-
+    def test_subsequent_expansions(self):
+        network = Network(model_fn='../data/networks/shallow/epoch_50_model.hdf5')
+        network2 = network.wider(2)
+        network3 = network2.wider(2)
+        self.assertTrue(True)

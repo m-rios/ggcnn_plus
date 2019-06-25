@@ -39,9 +39,9 @@ class TestNetworkOptimization(TestCase):
         print 'Actions: {}'.format(actions)
 
     def test_run_short_transpose(self):
-        node = Network(model_fn='../data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        node = Network(model_fn='../data/networks/shallow/epoch_50_model.hdf5')
         op = NetworkOptimization(eval_method='iou', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5', epochs=0, debug=True, expand_transpose=True)
-        [nodes, scores, actions] = op.run(node, depth=1, k=1)
+        [nodes, scores, actions] = op.run(node, depth=2, k=1)
         print 'Nodes: {}'.format(nodes)
         print 'Scores: {}'.format(scores)
         print 'Actions: {}'.format(actions)

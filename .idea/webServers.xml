@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="69c220f4-ba31-401f-b70a-de4f047fd9ef" name="Peregrine" url="http://peregrine.hpc.rug.nl">
+        <fileTransfer host="peregrine.hpc.rug.nl" port="22" rootFolder="/home/s3485781" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

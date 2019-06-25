@@ -203,19 +203,28 @@ class Network:
 
         return keras.models.Model(temp_model.input, outputs)
 
-    def get_connectivity(self, layer_idx=0):
+    def get_connectivity_original(self, layer_idx=0, model=None):
         """
         Returns the connectivity of the model
         :param layer_idx: Layer from which to start retrieving connectivity
+        :param model: model to get connectivity from (if None gets it from self)
         :return: A list where each element points to the layer with which that element as an inbound connection with
         """
-        assert len(self.model.layers) > 1, 'Model must have at least 2 layers for this function to be used. Current model only has {}'.format(len(self.model.layers))
+        model = self.model if model is None else model
+        assert len(model.layers) > 1, 'Model must have at least 2 layers for this function to be used. Current model only has {}'.format(len(model.layers))
         connectivity = [-1]
-        indexed_layers = zip(range(len(self.model.layers[layer_idx:])), self.model.layers[layer_idx:])
-        for layer in self.model.layers[layer_idx+1:]:
+        indexed_layers = zip(range(len(model.layers[layer_idx:])), model.layers[layer_idx:])
+        for layer in model.layers[layer_idx+1:]:
             inbound = layer._inbound_nodes[0].inbound_layers[0]
             c, _ = filter(lambda il: il[1] is inbound, indexed_layers)[0]
             connectivity.append(c)
+        return connectivity
+
+    def get_connectivity(self, layer_idx=0, model=None):
+        # model = self.model if model is None else model
+        model = self.model
+        connectivity = [-1] + range(len(model.layers) - len(model.output) - 1 - layer_idx)
+        connectivity += [connectivity[-1] + 1] * 4
         return connectivity
 
     def reconnect_model(self, layer_idx, layers, connectivity=None, replace=False):
@@ -246,7 +255,7 @@ class Network:
         else:
             connectivity = np.add(connectivity, 1).tolist()
 
-        connectivity += np.add(self.get_connectivity(end_layer_idx-1), len(layers))[1:].tolist()
+        connectivity += np.add(self.get_connectivity(layer_idx=end_layer_idx-1, model=temp_model), len(layers))[1:].tolist()
 
         # Reconnect model
         for l_idx, layer in enumerate(submodel_layers):
@@ -363,9 +372,15 @@ class Network:
         n_filters = old_layer.filters
         name = old_layer.name + '_wider'
 
-        next_layers, next_layers_type = zip(*[(node.outbound_layer, type(node.outbound_layer).__name__) for node in old_layer._outbound_nodes])
-
         assert old_layer_type == 'Conv2D' or old_layer_type == 'Conv2DTranspose'
+
+        if layer == (len(self.model.layers) - len(self.model.output) - 1):
+            next_layers = self.model.layers[-4:]
+            next_layers_type = ['Conv2D'] * 4
+        else:
+            next_layers = [self.model.layers[layer + 1]]
+            next_layers_type = [type(next_layers[0]).__name__]
+
 
         # Replace old layer with a wider version and reconnect the graph
         modified_layers = []
