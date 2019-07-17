@@ -12,9 +12,16 @@ def extract_ortho_views(pc):
     :return: 3 depth images corresponding to each orthographic projection
     """
     pca = PCA()
-    analysis = pca.fit(pc)
-    mu = analysis.mean_
-    components = analysis.components_
+    transformed = pca.fit_transform(pc)
+    mu = pca.mean_
+    components = pca.components_
+
+    front = transformed.T[1:].T
+    side = transformed.T[[0, 2]].T
+    top = transformed.T[:2].T
+
+    return front, side, top, pca
+
 
 
 def remove_plane(pc, k=10, epsilon=0.005):
