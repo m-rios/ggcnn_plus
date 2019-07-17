@@ -111,6 +111,20 @@ class Camera(object):
         else:
             return rgb, depth
 
+    def point_cloud(self):
+        """
+        Returns an array of 3D points representing the point cloud extracted from the depth image.
+        :return: A numpy array with 3d points
+        """
+        _, depth = self.snap()
+        pcd = []
+
+        for r in range(depth.shape[0]):
+            for c in range(depth.shape[1]):
+                pcd.append(self.world_from_camera(c, r, depth[r, c]))
+
+        return np.array(pcd)
+
     def depth_buffer(self):
         return p.getCameraImage(self._width, self._height, self._view, self._projection)[3]
 
@@ -493,13 +507,14 @@ class Simulator:
             state.append(obj_str)
         return '\n'.join(state)
 
-    def restore(self, csv, path):
+    def restore(self, csv, path, reset=True):
         """
             Will read the .csv and .bullet files associated to {fn} and load
             the world accordingly. Will look for linked .obj files in the
             {path} directory
         """
-        self.reset()
+        if reset:
+            self.reset()
         lines = csv.split('\n')
         for line in lines:
             if line == '' or line[:6] == 'obj_id':

@@ -14,6 +14,8 @@ Node = (node_idx, value)
              (9 , 14)(10 , 10)       (11 , 12)
 """
 
+import numpy as np
+
 from unittest import TestCase
 from utils.beam_search import BeamSearch
 
@@ -67,3 +69,17 @@ class TestBeamSearch(TestCase):
         self.assertTrue(nodes == [(0, 1), (1, 2), (4, 3), (9, 14)])
         self.assertTrue(scores == [1, 2, 3, 14])
         self.assertTrue(actions == [None, 'child 0', 'child 1', 'child 0'])
+
+    # def test_lookahead_only(self):
+    #     bs = self.BS()
+    #     nodes, parents, scores, actions, bw = bs.lookahead((0, 1), k=6, depth=3)
+    #
+    #     beam_scores = scores[-bw:]
+    #     best_leaf_idx = (len(scores) - bw + np.argsort(beam_scores)[-1])
+    #     best_path = [best_leaf_idx]
+    #
+    #     while parents[best_path[0]] != 0:
+    #         best_path.insert(0, parents[best_path[0]])
+    #
+    #     print best_path
+    #     self.assertTrue([1, 4, 9] == best_path)
