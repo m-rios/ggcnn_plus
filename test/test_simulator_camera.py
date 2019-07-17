@@ -1,4 +1,7 @@
 from unittest import TestCase
+
+from keras.backend import epsilon
+
 from simulator.simulator import Simulator
 from mpl_toolkits.mplot3d import Axes3D
 from utils.ransac import ransac
@@ -32,7 +35,7 @@ class TestSimulatorCamera(TestCase):
 
         # Get pcd
         pcd = sim.cam.point_cloud()
-        _, _, plane_idx = ransac(pcd, k=10)
+        _, _, plane_idx = ransac(pcd, k=10, epsilon=0.005)
         not_plane_idx = list(set(range(pcd.shape[0])) - set(plane_idx))
 
         fig = plt.figure()

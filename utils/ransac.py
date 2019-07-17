@@ -17,14 +17,10 @@ class Plane:
 
         self.v = np.random.rand(3)
         self.v -= self.v.dot(self.n) * self.n
+        self.v /= np.linalg.norm(self.v)
         self.w = np.cross(self.n, self.v)
-        try:
-            self.mu = [0, 0, self.D/self.n[2]]
-        except:
-            try:
-                self.mu = [0, self.D/self.n[1] , 0]
-            except:
-                self.mu = [self.D/self.n[0], 0, 0]
+        d2 = np.dot(self.n, self.n)
+        self.mu = [self.n[0]*D/d2, self.n[1]*D/d2, self.n[2]*D/d2]  # closest point to origin
 
     @classmethod
     def random_plane(cls, max_D=10):
@@ -35,6 +31,7 @@ class Plane:
 
     @classmethod
     def from_point_vector(cls, point, vector):
+        vector /= np.linalg.norm(vector)
         D = np.dot(point, vector)
         return cls(vector, D)
 
