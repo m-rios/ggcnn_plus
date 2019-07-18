@@ -5,6 +5,44 @@ from sklearn.decomposition import PCA
 from utils.ransac import ransac
 
 
+def depth_from_pc(pc, shape=300, index=0, missing=-1):
+    """
+    Construct depth image from point cloud
+    :param pc: point cloud array
+    :param shape: output shape of the depth image (only one value, output is squared)
+    :param index: column index in pc that defines depth
+    :param missing: default value for missing-data
+    :return: ndarray of shape shape with depth information
+    """
+    shape = (shape, shape)
+    depth = np.ones(shape) * missing
+    spatial_idx = list({0, 1, 2} - {index})
+
+    # row and column increments in world units
+    minr = np.min(pc[:, spatial_idx[0]])
+    maxr = np.max(pc[:, spatial_idx[0]])
+    minc = np.min(pc[:, spatial_idx[1]])
+    maxc = np.max(pc[:, spatial_idx[1]])
+    d = max(abs(maxr - minr)/(shape[0] - 1), abs(maxc - minc)/(shape[1] - 1))  # same increment for both axes
+
+    for p in pc:
+        r = int((p[spatial_idx[0]] - minr)/d)
+        c = int((p[spatial_idx[1]] - minc)/d)
+        depth[r, c] = p[index] if depth[r, c] == missing else max(depth[r, c], p[index])
+
+    # Swap rows for columns (e.g. rows vertical but x horizontal)
+    depth = depth.T
+
+    # Reverse columns for side view (x points left)
+    if index == 1:
+        depth = depth[:, ::-1]
+
+    # Reverse rows (origin at upper left corner in image space)
+    depth = depth[::-1]
+
+    return depth
+
+
 def extract_ortho_views(pc):
     """
     Projects a point cloud into three orthogonal views
@@ -21,7 +59,6 @@ def extract_ortho_views(pc):
     top = transformed.T[:2].T
 
     return front, side, top, pca
-
 
 
 def remove_plane(pc, k=10, epsilon=0.005):

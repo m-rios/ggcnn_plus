@@ -33,6 +33,7 @@ NO_FILTERS = [
 
 BATCH_SZ = 4
 
+
 class JacquardGenerator(Sequence):
     def __init__(self, path, batch_sz, dataset='train'):
         self.ds = h5py.File(path, 'r')[dataset]
