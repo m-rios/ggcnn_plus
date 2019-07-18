@@ -2,8 +2,8 @@ from unittest import TestCase
 from mpl_toolkits.mplot3d import Axes3D
 from simulator.simulator import Simulator
 from utils.ransac import Plane
+from core.orthographic import PointCloud
 
-import core.orthographic as ortho
 import pylab as plt
 import numpy as np
 import os
@@ -13,7 +13,7 @@ import h5py
 class TestOrthographic(TestCase):
     def __init__(self, *args, **kwargs):
         super(TestOrthographic, self).__init__(*args, **kwargs)
-        SIM = True
+        SIM = False
         if SIM:
             sim = Simulator(gui=False, use_egl=False)
 
@@ -61,14 +61,9 @@ class TestOrthographic(TestCase):
         print 'WARNING: Don\'t forget to call plt.show()'
         return ax
 
-    def test_plot_orthogonal_components(self):
-        ortho.extract_ortho_views(self.pcd)
-        ax = self.render_pcd(self.pcd)
-        ax.plot([0, 1], [0, 0], [0, 0], 'r')
-        plt.show()
-
-    def test_extract_ortho_views(self):
-        front, side, top, pca = ortho.extract_ortho_views(self.pcd)
+    def test_orthographic_projection(self):
+        cloud = PointCloud(self.pcd)
+        front, side, top, pca = cloud.orthographic_projection()
 
         ax = self.render_pcd(self.pcd)
         ax = self.render_frame(ax, pca.mean_, pca.components_)
@@ -85,7 +80,9 @@ class TestOrthographic(TestCase):
         plt.title('Top')
         plt.show()
 
-    def test_depth_from_pcd(self):
+    def test_to_depth(self):
+
+        cloud = PointCloud(self.pcd)
 
         ax = self.render_pcd(self.pcd)
         self.render_frame(ax, np.zeros(3), np.eye(3))
@@ -104,9 +101,9 @@ class TestOrthographic(TestCase):
         plt.scatter(xs, ys)
         plt.title('Top')
 
-        front = ortho.depth_from_pc(self.pcd, index=0)
-        right = ortho.depth_from_pc(self.pcd, index=1)
-        top = ortho.depth_from_pc(self.pcd, index=2)
+        front = cloud.to_depth(index=0)
+        right = cloud.to_depth(index=1)
+        top = cloud.to_depth(index=2)
 
         plt.figure()
         plt.subplot(2, 2, 1)
@@ -122,8 +119,9 @@ class TestOrthographic(TestCase):
         plt.show()
 
     def test_remove_plane(self):
+        cloud = PointCloud(self.pcd)
         self.render_pcd(self.pcd)
-        self.render_pcd(ortho.remove_plane(self.pcd))
+        self.render_pcd(cloud.remove_plane())
         plt.show()
 
     def test_cube(self):

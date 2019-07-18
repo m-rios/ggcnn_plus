@@ -565,6 +565,9 @@ class Network:
                                  shuffle=True,
                                  callbacks=callbacks)
 
+    def predict_pointcloud(self, pcl, remove_plane=True):
+        pass
+
 
 if __name__ == '__main__':
     network = Network(model_fn='../ggcnn/data/networks/ggcnn_rss/epoch_29_model.hdf5')
