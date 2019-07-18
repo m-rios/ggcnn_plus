@@ -13,15 +13,19 @@ import h5py
 class TestOrthographic(TestCase):
     def __init__(self, *args, **kwargs):
         super(TestOrthographic, self).__init__(*args, **kwargs)
-        # sim = Simulator(gui=False, use_egl=False)
-        #
-        # # Load random scene
-        # scenes_ds = h5py.File('../data/scenes/shapenet_1.hdf5', 'r')
-        # scene = scenes_ds['scene'][np.random.randint(len(scenes_ds['scene'][:]))]
-        # sim.restore(scene, os.environ['MODELS_PATH'])
-        #
-        # # Get pcd
-        # self.pcd = sim.cam.point_cloud()
+        SIM = True
+        if SIM:
+            sim = Simulator(gui=False, use_egl=False)
+
+            # Load random scene
+            scenes_ds = h5py.File('../data/scenes/shapenet_1.hdf5', 'r')
+            scene = scenes_ds['scene'][np.random.randint(len(scenes_ds['scene'][:]))]
+            sim.restore(scene, os.environ['MODELS_PATH'])
+
+            # Get pcd
+            self.pcd = sim.cam.point_cloud()
+        else:
+            self.pcd = self.create_cube()
 
     def create_cube(self):
         base = Plane.from_point_vector([0, 0, 0], [0, 0, 1])
@@ -58,18 +62,15 @@ class TestOrthographic(TestCase):
         return ax
 
     def test_plot_orthogonal_components(self):
-        cube = self.create_cube()
-        ortho.extract_ortho_views(cube)
-        ax = self.render_pcd(cube)
+        ortho.extract_ortho_views(self.pcd)
+        ax = self.render_pcd(self.pcd)
         ax.plot([0, 1], [0, 0], [0, 0], 'r')
         plt.show()
 
-
     def test_extract_ortho_views(self):
-        cube = self.create_cube()
-        front, side, top, pca = ortho.extract_ortho_views(cube)
+        front, side, top, pca = ortho.extract_ortho_views(self.pcd)
 
-        ax = self.render_pcd(cube)
+        ax = self.render_pcd(self.pcd)
         ax = self.render_frame(ax, pca.mean_, pca.components_)
 
         plt.figure()
@@ -85,28 +86,27 @@ class TestOrthographic(TestCase):
         plt.show()
 
     def test_depth_from_pcd(self):
-        cube = self.create_cube()
 
-        ax = self.render_pcd(cube)
+        ax = self.render_pcd(self.pcd)
         self.render_frame(ax, np.zeros(3), np.eye(3))
 
         plt.figure()
         plt.subplot(2, 2, 1)
-        xs, ys = cube[:, [1, 2]].T
+        xs, ys = self.pcd[:, [1, 2]].T
         plt.scatter(xs, ys)
         plt.title('Front')
         plt.subplot(2, 2, 2)
-        xs, ys = cube[:, [0, 2]].T
+        xs, ys = self.pcd[:, [0, 2]].T
         plt.scatter(-xs, ys)
         plt.title('Right')
         plt.subplot(2, 2, 3)
-        xs, ys = cube[:, [0, 1]].T
+        xs, ys = self.pcd[:, [0, 1]].T
         plt.scatter(xs, ys)
         plt.title('Top')
 
-        front = ortho.depth_from_pc(cube, index=0)
-        right = ortho.depth_from_pc(cube, index=1)
-        top = ortho.depth_from_pc(cube, index=2)
+        front = ortho.depth_from_pc(self.pcd, index=0)
+        right = ortho.depth_from_pc(self.pcd, index=1)
+        top = ortho.depth_from_pc(self.pcd, index=2)
 
         plt.figure()
         plt.subplot(2, 2, 1)
