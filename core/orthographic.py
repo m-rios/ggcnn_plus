@@ -1,33 +1,25 @@
 import numpy as np
-import pylab as plt
-from mpl_toolkits.mplot3d import Axes3D
+import pandas as pd
+import pptk
 from sklearn.decomposition import PCA
-from utils.ransac import ransac
+from sklearn.linear_model import RANSACRegressor
 
 
 class PointCloud:
     def __init__(self, cloud):
         self.cloud = cloud
 
+    def __getitem__(self, item):
+        return self.cloud[item]
+
+    def __setitem__(self, key, value):
+        self.cloud[key] = value
+
     @classmethod
     def from_file(cls, fn):
-        cloud = np.empty((1, 3))
-        with open(fn, 'r') as f:
-            for line in f.readlines():
-
-                fields = line.split()
-
-                if len(fields) != 5:
-                    # Not a point line in the file.
-                    continue
-                try:
-                    # Not a number, carry on.
-                    float(fields[0])
-                except ValueError:
-                    continue
-
-                point = np.reshape(fields[:3], (1, 3))
-                cloud = np.append(cloud, point)
+        # If this breaks check that 'DATA ascii' is in line 9 in the file
+        df = pd.read_csv(fn, skiprows=range(10), names=['x', 'y', 'z', 'rgb', 'index'], delimiter=' ')
+        cloud = df[['x', 'y', 'z']].to_numpy()
         return cls(cloud)
 
     def to_depth(self, shape=300, index=0, missing=-1):
@@ -66,7 +58,6 @@ class PointCloud:
 
         return depth
 
-
     def orthographic_projection(self):
         """
         Projects a point cloud into three orthogonal views
@@ -84,28 +75,30 @@ class PointCloud:
 
         return front, side, top, pca
 
+    def filter_roi(self, roi):
+        """
+        Removes all points not in roi
+        :param roi: [min_x, max_x, min_y, max_y, min_z, max_z]
+        """
+        assert len(roi) == 6
 
-    def remove_plane(self, k=10, epsilon=0.005):
+        mask = np.all(np.logical_and(np.less_equal(self.cloud, roi[1::2]), np.greater_equal(self.cloud, roi[::2])), axis=1)
+        self.cloud = self.cloud[mask, :]
+
+    def remove_plane(self, th=10):
         """
         Removes the largest plane in the point cloud (assumed to be the workspace surface)
         :param pc: ndarray (N,3) representing the point cloud
-        :param k: number of iterations for plane segmentation
-        :param epsilon: max error to consider point lies within model (ransac)
+        :param n: minimum number of points to estimate a model
+        :param k: max number of iterations
+        :param epsilon: threshold to accept a data point as part of the model
+        :param d: fraction of data points needed to lie within model for model for it to be accepted as valid
         :return: a pc without the largest plane
         """
-        _, _, plane_idxs = ransac(self.cloud, k=k, epsilon=epsilon)
-        object_idxs = list(set(range(self.cloud.shape[0])) - set(plane_idxs))
-        object_pc = self.cloud[object_idxs]
+        ransac = RANSACRegressor(residual_threshold=th)
+        ransac.fit(self.cloud[:, :2], self.cloud[:, 2])
+        mask = np.logical_not(ransac.inlier_mask_)
+        self.cloud = self.cloud[mask, :]
 
-        return object_pc
-
-
-if __name__ == '__main__':
-    depth = np.load('../test/depth_inpainted.npy')
-    rows, cols, depth = depth_to_pcd(depth)
-
-    fig = plt.figure()
-    ax = Axes3D(fig)
-
-    ax.scatter(rows, cols, depth)
-    plt.show()
+    def render(self):
+        pptk.viewer(self.cloud)

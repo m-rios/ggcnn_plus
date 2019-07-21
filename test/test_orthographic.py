@@ -121,10 +121,52 @@ class TestOrthographic(TestCase):
     def test_remove_plane(self):
         cloud = PointCloud(self.pcd)
         self.render_pcd(self.pcd)
-        self.render_pcd(cloud.remove_plane())
+        cloud.remove_plane()
+        self.render_pcd(cloud.cloud)
         plt.show()
 
     def test_cube(self):
         pc = self.create_cube()
         self.render_pcd(pc)
         plt.show()
+
+    def test_from_file(self):
+        cloud = PointCloud.from_file('pcd0116.txt')
+        cloud.render()
+
+    def test_scikit_ransac(self):
+        from sklearn import linear_model, datasets
+        # n_samples = 1000
+        # n_outliers = 50
+        # X, y, coef = datasets.make_regression(n_samples=n_samples, n_features=2,
+        #                          n_informative=1, noise=10,
+        #                          coef=True, random_state=0)
+        X = self.pcd[:, :2]
+        y = self.pcd[:, 2]
+        lr = linear_model.LinearRegression()
+        lr.fit(X, y)
+        ransac = linear_model.RANSACRegressor()
+        ransac.fit(X, y)
+        inlier_mask = ransac.inlier_mask_
+
+        fig = plt.figure()
+        ax = Axes3D(fig)
+
+        xs, ys, zs = self.pcd[inlier_mask].T
+        ax.scatter(xs, ys, zs)
+        xs, ys, zs = self.pcd[np.logical_not(inlier_mask)].T
+        ax.scatter(xs, ys, zs, color='red')
+        plt.show()
+
+    def test_filter_roi(self):
+        cloud = PointCloud(self.pcd)
+        cloud.filter_roi([-0.5, 0.5]*3)
+        self.render_pcd(cloud.cloud)
+        plt.show()
+
+    def test_filter_and_ransac(self):
+        cloud = PointCloud.from_file('pcd0116.txt')
+        # cloud.filter_roi([-np.inf, np.inf, -np.inf, np.inf, 0, 500])
+        cloud.filter_roi([0, 1400, -np.inf, np.inf, 0, 500])
+        cloud.remove_plane()
+        cloud.render()
