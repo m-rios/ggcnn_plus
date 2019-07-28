@@ -422,6 +422,19 @@ class Simulator:
         self.drawFrame([0,0,0])
         p.resetJointState(self.gid, 2, 1)
 
+    def evaluate_6dof_grasp(self, pose, width):
+        if not self.gid:
+            self.add_gripper(MODULE_PATH + '/gripper.urdf')
+        else:
+            for jid in [0,1,3,4,5]:
+                p.resetJointState(self.gid, jid, 0)
+            p.resetJointState(self.gid, 2, 1)
+        if not self.bin:
+            self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
+
+        # Pre grasp pose
+         
+
     def evaluate_grasp(self, pose, width):
         if not self.gid:
             self.add_gripper(MODULE_PATH + '/gripper.urdf')

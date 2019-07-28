@@ -13,19 +13,8 @@ import h5py
 class TestOrthographic(TestCase):
     def __init__(self, *args, **kwargs):
         super(TestOrthographic, self).__init__(*args, **kwargs)
-        SIM = False
-        if SIM:
-            sim = Simulator(gui=False, use_egl=False)
-
-            # Load random scene
-            scenes_ds = h5py.File('../data/scenes/shapenet_1.hdf5', 'r')
-            scene = scenes_ds['scene'][np.random.randint(len(scenes_ds['scene'][:]))]
-            sim.restore(scene, os.environ['MODELS_PATH'])
-
-            # Get pcd
-            self.pcd = sim.cam.point_cloud()
-        else:
-            self.pcd = self.create_cube()
+        # self.pcd = self.create_cube()
+        self.pcd = np.load('points.npy')
 
     def create_cube(self):
         base = Plane.from_point_vector([0, 0, 0], [0, 0, 1])
@@ -134,30 +123,6 @@ class TestOrthographic(TestCase):
         cloud = PointCloud.from_file('pcd0116.txt')
         cloud.render()
 
-    def test_scikit_ransac(self):
-        from sklearn import linear_model, datasets
-        # n_samples = 1000
-        # n_outliers = 50
-        # X, y, coef = datasets.make_regression(n_samples=n_samples, n_features=2,
-        #                          n_informative=1, noise=10,
-        #                          coef=True, random_state=0)
-        X = self.pcd[:, :2]
-        y = self.pcd[:, 2]
-        lr = linear_model.LinearRegression()
-        lr.fit(X, y)
-        ransac = linear_model.RANSACRegressor()
-        ransac.fit(X, y)
-        inlier_mask = ransac.inlier_mask_
-
-        fig = plt.figure()
-        ax = Axes3D(fig)
-
-        xs, ys, zs = self.pcd[inlier_mask].T
-        ax.scatter(xs, ys, zs)
-        xs, ys, zs = self.pcd[np.logical_not(inlier_mask)].T
-        ax.scatter(xs, ys, zs, color='red')
-        plt.show()
-
     def test_filter_roi(self):
         cloud = PointCloud(self.pcd)
         cloud.filter_roi([-0.5, 0.5]*3)
@@ -166,7 +131,52 @@ class TestOrthographic(TestCase):
 
     def test_filter_and_ransac(self):
         cloud = PointCloud.from_file('pcd0116.txt')
-        # cloud.filter_roi([-np.inf, np.inf, -np.inf, np.inf, 0, 500])
         cloud.filter_roi([0, 1400, -np.inf, np.inf, 0, 500])
         cloud.remove_plane()
         cloud.render()
+
+    def test_full_pipeline(self):
+        cloud = PointCloud.from_file('pcd0116.txt')
+        # cloud.filter_roi([-np.inf, np.inf, -np.inf, np.inf, 0, 500])
+        cloud.filter_roi([0, 1400, -np.inf, np.inf, 0, 500])
+        cloud.remove_plane()
+
+        cloud.render()
+
+        cloud.pca()
+        plt.subplot(1, 3, 1)
+        plt.imshow(cloud.to_depth(index=0))
+        plt.subplot(1, 3, 2)
+        plt.imshow(cloud.to_depth(index=1))
+        plt.subplot(1, 3, 3)
+        plt.imshow(cloud.to_depth(index=2))
+        plt.show()
+
+        # TODO: finish pipeline
+
+    def test_find_plane(self):
+        pcd = np.load('points.npy')
+        cloud = PointCloud(pcd)
+        mean, normal = cloud.find_plane()
+
+    def test_render(self):
+        pcd = np.load('points2.npy')
+        cloud = PointCloud(pcd)
+        cloud.render()
+        cloud.render(use_pptk=False, subsample=0.01)
+
+    # TODO: remove this
+    def test_rotate_points_to_sensible_orientation(self):
+        cloud = PointCloud.from_npy('points.npy')
+        plane_cloud = cloud.find_plane(th=0.02)
+        plane_cloud.pca()
+        cloud.cloud = plane_cloud.transform(cloud.cloud)
+        cloud.cloud[:, 0] += 0.7
+        rotated = cloud.rotate([0, 1, 0], np.radians(-45))
+        rotated.save('isolated_cloud.npy')
+
+    def test_rotate(self):
+        pcd = np.load('isolated_cloud.npy')
+        cloud = PointCloud(pcd)
+        rotated = cloud.rotate([0, 1, 0], np.radians(45))
+        rotated.render()
