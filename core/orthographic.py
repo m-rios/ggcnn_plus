@@ -9,28 +9,16 @@ from scipy.spatial.transform import Rotation as R
 
 
 class Depth:
-    def __init__(self, img, pixel_size, pca, pixel_radius):
-        self.pixel_size = pixel_size
-        self.pca = pca
+    def __init__(self, img, inverse_transform, pixel_radius, index):
         self.img = img
-
-        # volume = np.zeros(img.shape + (np.multiply(*img.shape),)) * -np.inf
-        # for p_idx, p in enumerate(img.flatten()):
-        #     r, c = np.unravel_index(p_idx, img.shape)
-        #     rs = range(r - pixel_radius, r + pixel_radius + 1)
-        #     cs = range(c - pixel_radius, c + pixel_radius + 1)
-        #     rs, cs = np.meshgrid(rs, cs)
-        #     rs, cs = rs.flatten(), cs.flatten()
-        #     volume[rs, cs, p_idx] = img[r, c]
-        #
-        # self.img = np.max(volume, axis=2)
+        self.inverse_transform = inverse_transform
+        self.index = index
 
         self._apply_radius(pixel_radius)
         self.fill_missing()
 
     def _apply_radius(self, pixel_radius):
         filled = np.argwhere(np.logical_not(np.isinf(self.img)))
-        dilated = np.ones(self.img.shape + (filled.shape[0],)) * -np.inf
         new_img = np.ones(self.img.shape) * -np.inf
 
         for r, c in filled:
@@ -40,19 +28,22 @@ class Depth:
 
         self.img = new_img
 
-
     def blur(self, sigma):
         """Applies gaussian blur"""
         self.img = gaussian(self.img, sigma, preserve_range=True)
-
-    def get_3d_coordinates(self, u, v):
-        point = np.reshape([v, u, self.img[u, v]], (1,3))
-        return self.pca.inverse_transform(point)
 
     def fill_missing(self):
         missing_idx = np.isinf(self.img)
         fill_value = np.min(self.img[np.logical_not(missing_idx)])
         self.img[missing_idx] = fill_value
+
+    def to_object(self, uv):
+        uv = np.array(uv)
+        u_ = uv[1]
+        v_ = self.img.shape[0] - uv[0] - 1
+        xy = self.inverse_transform(np.array([u_, v_]))
+        d = self.img[uv[0], uv[1]]
+        return np.insert(xy, self.index, d)
 
 
 class PointCloud:
@@ -137,10 +128,6 @@ class PointCloud:
         spatial_idx = list({0, 1, 2} - {index})
 
         # Calculate pixel size (same for all axes and all views)
-        minr = np.min(self.cloud[:, spatial_idx[0]])
-        minc = np.min(self.cloud[:, spatial_idx[1]])
-        maxr = np.max(self.cloud[:, spatial_idx[0]])
-        maxc = np.max(self.cloud[:, spatial_idx[1]])
         min_ = np.min(self.cloud[:, spatial_idx], axis=0)
         max_ = np.max(self.cloud[:, spatial_idx], axis=0)
 
@@ -162,60 +149,10 @@ class PointCloud:
         # Reverse rows (origin at upper left corner in image space)
         depth = depth[::-1]
 
-        return Depth(depth, pixel_size, self.pca_, pixel_radius)
+        def inverse_transform(pixel):
+            return (pixel - padding - t)*pixel_size + min_
 
-    def to_depth_old(self, shape=300, index=0, padding=7, pixel_radius=1):
-        """
-        Construct depth image from point cloud
-        :param shape: output shape of the depth image (only one value, output is squared)
-        :param index: column index in pc that defines depth
-        :param missing: default value for missing-data
-        :return: ndarray of shape shape with depth information
-        """
-        assert pixel_radius <= padding
-        final_shape = shape
-        shape -= padding*2
-        depth = np.ones((final_shape, final_shape, self.cloud.shape[0])) * -np.inf
-        spatial_idx = list({0, 1, 2} - {index})
-
-        # Calculate pixel size (same for all axes and all views)
-        minr = np.min(self.cloud[:, spatial_idx[0]])
-        minc = np.min(self.cloud[:, spatial_idx[1]])
-        maxr = np.max(self.cloud[:, spatial_idx[0]])
-        maxc = np.max(self.cloud[:, spatial_idx[1]])
-        min_ = np.min(self.cloud[:, spatial_idx], axis=0)
-        max_ = np.max(self.cloud[:, spatial_idx], axis=0)
-
-        pixel_size = self.pixel_size(shape)
-        center = (max_ - min_)/2.  # Center of the object in world units
-        t = (shape/2. - 1 - center/pixel_size).astype(np.int)  # Translation from center w.r.t. min_ to image center
-
-        for p_idx, p in enumerate(self.cloud):
-            # r = int((p[spatial_idx[0]] - minr)/pixel_size) + padding
-            # c = int((p[spatial_idx[1]] - minc)/pixel_size) + padding
-            # r = int((p[spatial_idx[0]] - (maxr - minr)/2)/pixel_size) + padding
-            # c = int((p[spatial_idx[1]] - (maxc - minc)/2)/pixel_size) + padding
-            r, c = ((p[spatial_idx] - min_)/pixel_size).astype(np.int) + padding + t
-            rs = range(r - pixel_radius, r + pixel_radius + 1)
-            cs = range(c - pixel_radius, c + pixel_radius + 1)
-            rs, cs = np.meshgrid(rs, cs)
-            rs, cs = rs.flatten(), cs.flatten()
-            depth[rs, cs, p_idx] = p[index]
-
-        # Positive values occlude negative ones
-        depth = np.max(depth, axis=2)
-
-        # Swap rows for columns (e.g. rows vertical but x horizontal)
-        depth = depth.T
-
-        # Reverse columns for side view (x points left)
-        if index == 1:
-            depth = depth[:, ::-1]
-
-        # Reverse rows (origin at upper left corner in image space)
-        depth = depth[::-1]
-
-        return Depth(depth, pixel_size, self.pca_)
+        return Depth(depth, inverse_transform, pixel_radius, index)
 
     def orthographic_projection(self):
         """
@@ -301,11 +238,11 @@ class PointCloud:
         Renders the cloud
         :param subsample: fraction of the points to render
         """
-        selected = np.random.choice(range(self.cloud.shape[0]), int(subsample*self.cloud.shape[0]))
-        pcd = self.cloud[selected]
-        return pptk.viewer(pcd)
+        return pptk.viewer(self.cloud)
 
     def plot(self, subsample=1):
+        selected = np.random.choice(range(self.cloud.shape[0]), int(subsample*self.cloud.shape[0]))
+        pcd = self.cloud[selected]
         import pylab as plt
         from mpl_toolkits.mplot3d import Axes3D
         fig = plt.figure()
@@ -356,18 +293,64 @@ class OrthoNet:
             print 'Plane removal was not successful, trying again'
             wo_table = wrt_table_cloud.remove_plane()
         wrt_table_cloud = wo_table
+        global wrt_object_cloud
         wrt_object_cloud = wrt_table_cloud.pca(axes=[0, 1])
 
         # front = wrt_object_cloud.front_depth
-        right = wrt_object_cloud.right_depth
+        global right
+        right = wrt_object_cloud.top_depth
         # top = wrt_object_cloud.top_depth
 
+        global last_lmb_event
+        last_lmb_event = cv2.EVENT_LBUTTONUP
+
+        global center
+        center = (0, 0)
+
+        def handle_mouse(event, x, y, flags, param):
+            global last_lmb_event
+            global center
+            global color
+            global right
+            global end
+            global start
+            global wrt_object_cloud
+
+            # Mouse click
+            if event == cv2.EVENT_LBUTTONDOWN:
+                print 'Mouse clicked at {}'.format((x, y))
+                last_lmb_event = event
+                center = (x, y)
+            # Mouse release or drag
+            elif event == cv2.EVENT_LBUTTONUP:
+                print 'Mouse released at {}'.format((x, y))
+                last_lmb_event = event
+                # depth = right.img[center[::-1]]
+                # print depth
+                cloud = wrt_object_cloud.cloud
+                point = right.to_object(center[::-1])
+                points = np.concatenate((cloud, np.reshape(point, (1, 3))))
+                viewer = pptk.viewer(points)
+                viewer.attributes(np.concatenate((np.ones(cloud.shape), [[1, 0, 0]])))
+                viewer.set(point_size=0.0005)
+            elif event == cv2.EVENT_MOUSEMOVE and last_lmb_event == cv2.EVENT_LBUTTONDOWN:
+                end = (x, y)
+                start = tuple(np.clip(np.subtract(np.multiply(center, 2), end), (0, 0), (299, 299)).astype(np.int))
+                to_draw = np.copy(color)
+                cv2.line(to_draw, start, end, (0, 255, 0), 2)
+                cv2.imshow('views', to_draw)
+
         cv2.namedWindow('views')
+        cv2.setMouseCallback('views', handle_mouse)
         normalized = (255 * (right.img - np.min(right.img))/(np.max(right.img) - np.min(right.img))).astype(np.uint8)
+        global color
         color = cv2.applyColorMap(normalized, cv2.COLORMAP_HOT)
         cv2.imshow('views', color)
-        while cv2.waitKey() is not 113:
-            pass
+        print 'image rendered'
+        while True:
+            key_press = cv2.waitKey()
+            if key_press is 113:
+                break
 
 
 if __name__ == '__main__':
