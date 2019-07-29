@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pptk
+import cv2
 from sklearn.decomposition import PCA
 from sklearn.linear_model import RANSACRegressor
 from skimage.filters import gaussian
@@ -8,12 +9,37 @@ from scipy.spatial.transform import Rotation as R
 
 
 class Depth:
-    def __init__(self, img, pixel_size, pca):
-        self.img = img
+    def __init__(self, img, pixel_size, pca, pixel_radius):
         self.pixel_size = pixel_size
         self.pca = pca
+        self.img = img
 
+        # volume = np.zeros(img.shape + (np.multiply(*img.shape),)) * -np.inf
+        # for p_idx, p in enumerate(img.flatten()):
+        #     r, c = np.unravel_index(p_idx, img.shape)
+        #     rs = range(r - pixel_radius, r + pixel_radius + 1)
+        #     cs = range(c - pixel_radius, c + pixel_radius + 1)
+        #     rs, cs = np.meshgrid(rs, cs)
+        #     rs, cs = rs.flatten(), cs.flatten()
+        #     volume[rs, cs, p_idx] = img[r, c]
+        #
+        # self.img = np.max(volume, axis=2)
+
+        self._apply_radius(pixel_radius)
         self.fill_missing()
+
+    def _apply_radius(self, pixel_radius):
+        filled = np.argwhere(np.logical_not(np.isinf(self.img)))
+        dilated = np.ones(self.img.shape + (filled.shape[0],)) * -np.inf
+        new_img = np.ones(self.img.shape) * -np.inf
+
+        for r, c in filled:
+            rs = range(r - pixel_radius, r + pixel_radius + 1)
+            cs = range(c - pixel_radius, c + pixel_radius + 1)
+            new_img[np.ix_(rs, cs)] = np.maximum(new_img[np.ix_(rs, cs)], np.full((2*pixel_radius + 1,)*2, self.img[r, c]))
+
+        self.img = new_img
+
 
     def blur(self, sigma):
         """Applies gaussian blur"""
@@ -107,6 +133,48 @@ class PointCloud:
         assert pixel_radius <= padding
         final_shape = shape
         shape -= padding*2
+        depth = np.ones((final_shape, final_shape)) * -np.inf
+        spatial_idx = list({0, 1, 2} - {index})
+
+        # Calculate pixel size (same for all axes and all views)
+        minr = np.min(self.cloud[:, spatial_idx[0]])
+        minc = np.min(self.cloud[:, spatial_idx[1]])
+        maxr = np.max(self.cloud[:, spatial_idx[0]])
+        maxc = np.max(self.cloud[:, spatial_idx[1]])
+        min_ = np.min(self.cloud[:, spatial_idx], axis=0)
+        max_ = np.max(self.cloud[:, spatial_idx], axis=0)
+
+        pixel_size = self.pixel_size(shape)
+        center = (max_ - min_)/2.  # Center of the object in world units
+        t = (shape/2. - 1 - center/pixel_size).astype(np.int)  # Translation from center w.r.t. min_ to image center
+
+        for p in self.cloud:
+            r, c = ((p[spatial_idx] - min_)/pixel_size).astype(np.int) + padding + t
+            depth[r, c] = max(p[index], depth[r, c])
+
+        # Swap rows for columns (e.g. rows vertical but x horizontal)
+        depth = depth.T
+
+        # Reverse columns for side view (x points left)
+        if index == 1:
+            depth = depth[:, ::-1]
+
+        # Reverse rows (origin at upper left corner in image space)
+        depth = depth[::-1]
+
+        return Depth(depth, pixel_size, self.pca_, pixel_radius)
+
+    def to_depth_old(self, shape=300, index=0, padding=7, pixel_radius=1):
+        """
+        Construct depth image from point cloud
+        :param shape: output shape of the depth image (only one value, output is squared)
+        :param index: column index in pc that defines depth
+        :param missing: default value for missing-data
+        :return: ndarray of shape shape with depth information
+        """
+        assert pixel_radius <= padding
+        final_shape = shape
+        shape -= padding*2
         depth = np.ones((final_shape, final_shape, self.cloud.shape[0])) * -np.inf
         spatial_idx = list({0, 1, 2} - {index})
 
@@ -115,14 +183,19 @@ class PointCloud:
         minc = np.min(self.cloud[:, spatial_idx[1]])
         maxr = np.max(self.cloud[:, spatial_idx[0]])
         maxc = np.max(self.cloud[:, spatial_idx[1]])
+        min_ = np.min(self.cloud[:, spatial_idx], axis=0)
+        max_ = np.max(self.cloud[:, spatial_idx], axis=0)
 
         pixel_size = self.pixel_size(shape)
+        center = (max_ - min_)/2.  # Center of the object in world units
+        t = (shape/2. - 1 - center/pixel_size).astype(np.int)  # Translation from center w.r.t. min_ to image center
 
         for p_idx, p in enumerate(self.cloud):
-            r = int((p[spatial_idx[0]] - minr)/pixel_size) + padding
-            c = int((p[spatial_idx[1]] - minc)/pixel_size) + padding
+            # r = int((p[spatial_idx[0]] - minr)/pixel_size) + padding
+            # c = int((p[spatial_idx[1]] - minc)/pixel_size) + padding
             # r = int((p[spatial_idx[0]] - (maxr - minr)/2)/pixel_size) + padding
             # c = int((p[spatial_idx[1]] - (maxc - minc)/2)/pixel_size) + padding
+            r, c = ((p[spatial_idx] - min_)/pixel_size).astype(np.int) + padding + t
             rs = range(r - pixel_radius, r + pixel_radius + 1)
             cs = range(c - pixel_radius, c + pixel_radius + 1)
             rs, cs = np.meshgrid(rs, cs)
@@ -199,13 +272,13 @@ class PointCloud:
         mask = np.all(np.logical_and(np.less_equal(self.cloud, roi[1::2]), np.greater_equal(self.cloud, roi[::2])), axis=1)
         return PointCloud(self.cloud[mask, :])
 
-    def find_plane(self, th=10.):
+    def find_plane(self, th=.02):
         ransac = RANSACRegressor(residual_threshold=th)
         ransac.fit(self.cloud[:, :2], self.cloud[:, 2])
         inliers = ransac.inlier_mask_
         return PointCloud(self.cloud[inliers])
 
-    def remove_plane(self, th=10.):
+    def remove_plane(self, th=.02):
         """
         Removes the largest plane in the point cloud (assumed to be the workspace surface)
         :param pc: ndarray (N,3) representing the point cloud
@@ -223,28 +296,27 @@ class PointCloud:
         mask = np.logical_not(mask)
         return PointCloud(self.cloud[mask])
 
-    def render(self, use_pptk=True, subsample=1):
+    def render(self):
         """
         Renders the cloud
-        :param use_pptk: if True will use pptk. Otherwise it will use matplotlib's scatter (slow)
         :param subsample: fraction of the points to render
         """
         selected = np.random.choice(range(self.cloud.shape[0]), int(subsample*self.cloud.shape[0]))
         pcd = self.cloud[selected]
-        if use_pptk:
-            pptk.viewer(pcd)
-        else:
-            import pylab as plt
-            from mpl_toolkits.mplot3d import Axes3D
-            fig = plt.figure()
-            ax = Axes3D(fig)
+        return pptk.viewer(pcd)
 
-            xs, ys, zs = pcd.T
-            ax.scatter(xs, ys, zs, '*', s=0.1)
-            plt.xlabel('x')
-            plt.ylabel('y')
-            plt.axis('equal')
-            plt.show()
+    def plot(self, subsample=1):
+        import pylab as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        fig = plt.figure()
+        ax = Axes3D(fig)
+
+        xs, ys, zs = pcd.T
+        ax.scatter(xs, ys, zs, '*', s=0.1)
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.axis('equal')
+        plt.show()
 
     def plot_views(self, show=True):
         front = self.front_depth
@@ -263,25 +335,42 @@ class PointCloud:
         plt.imshow(top.img)
         plt.title('Top')
         if show:
+            print 'Done plotting'
             plt.show()
 
 
-def pipeline():
-    original_cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
-    plane_cloud = original_cloud.find_plane(th=0.02)
-    plane_cloud.pca()
-    filtered_cloud = PointCloud(plane_cloud.transform(original_cloud.cloud))
-    filtered_cloud = filtered_cloud.filter_roi([-2, 1, -.15, .25, 0, 0.2])
-    filtered_cloud = filtered_cloud.remove_plane(th=0.02)
-    assert filtered_cloud.cloud.size > 0
-    # pre_filtered_cloud = filtered_cloud.remove_plane(th=0.02)
-    # while pre_filtered_cloud.cloud.size == 0:
-    #     pre_filtered_cloud = filtered_cloud.remove_plane(th=0.02)
-    # filtered_cloud = pre_filtered_cloud
-    filtered_cloud = filtered_cloud.pca(axes=[0, 1])
+class OrthoNet:
+    def __init__(self):
+        self.cloud = None
 
-    filtered_cloud.plot_views()
+    def predict_debug(self, cloud, roi=None):
+        if roi is None:
+            roi = [-np.inf, np.inf] * 3
+        self.cloud = PointCloud(cloud)
+        plane_cloud = self.cloud.find_plane()
+        plane_cloud.pca()
+        wrt_table_cloud = PointCloud(plane_cloud.transform(self.cloud.cloud))
+        wrt_table_cloud = wrt_table_cloud.filter_roi(roi)
+        wo_table = wrt_table_cloud.remove_plane()
+        while wo_table.cloud.size == 0:
+            print 'Plane removal was not successful, trying again'
+            wo_table = wrt_table_cloud.remove_plane()
+        wrt_table_cloud = wo_table
+        wrt_object_cloud = wrt_table_cloud.pca(axes=[0, 1])
+
+        # front = wrt_object_cloud.front_depth
+        right = wrt_object_cloud.right_depth
+        # top = wrt_object_cloud.top_depth
+
+        cv2.namedWindow('views')
+        normalized = (255 * (right.img - np.min(right.img))/(np.max(right.img) - np.min(right.img))).astype(np.uint8)
+        color = cv2.applyColorMap(normalized, cv2.COLORMAP_HOT)
+        cv2.imshow('views', color)
+        while cv2.waitKey() is not 113:
+            pass
 
 
 if __name__ == '__main__':
-    pipeline()
+    cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
+    onet = OrthoNet()
+    onet.predict_debug(cloud, roi=[-2, 1, -.15, .25, 0, 0.2])
