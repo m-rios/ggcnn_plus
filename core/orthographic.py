@@ -339,115 +339,67 @@ class OrthoNet:
         object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])
 
         # Prediction
-        position, orientation = predictor(object_cloud.top_depth)
+        position, orientation, angle, width = predictor(object_cloud.right_depth)
 
         # Backwards transform
-        position = position.reshape((1, 3))
-        roi_position = tf_roi_to_object.transform_inverse(position, axes=[0, 1])
+        roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
+        roi_orientation = tf_roi_to_object.transform_inverse(orientation.reshape((1, 3)), axes=[0, 1])
         # render_prediction(roi_cloud, roi_position)
         camera_position = tf_camera_to_plane.transform_inverse(roi_position)
+        camera_orientation = tf_camera_to_plane.transform_inverse(roi_orientation)
+        roi_com = tf_camera_to_plane.transform_inverse(np.zeros((1, 3)))
+        camera_orientation += roi_com
 
-        return camera_position, None
+        return camera_position, camera_orientation, angle, width
 
-    def predict_old(self, cloud, predictor, roi=None):
-        if roi is None:
-            roi = [-np.inf, np.inf] * 3
-        self.cloud = PointCloud(cloud)
-        plane_cloud = self.cloud.find_plane()
-        plane_cloud.pca()
-        wrt_table_cloud = PointCloud(plane_cloud.transform(self.cloud.cloud))
-        wrt_table_cloud = wrt_table_cloud.filter_roi(roi)
-        wrt_table_cloud = wrt_table_cloud.remove_plane()
-        wrt_object_cloud = wrt_table_cloud.pca(axes=[0, 1])
-
-        depth = wrt_object_cloud.top_depth
-        point, orientation = predictor(depth)
-
-        point_wrt_table = wrt_object_cloud.transform_inverse(point)
-        point_wrt_world = plane_cloud.transform_inverse(point_wrt_table)
-
-        return point_wrt_world
-
-
-def manual_predictor(depth_img):
-    global last_lmb_event
-    last_lmb_event = cv2.EVENT_LBUTTONUP
-
-    normalized = (255 * (depth_img.img - np.min(depth_img.img))/(np.max(depth_img.img) - np.min(depth_img.img))).astype(np.uint8)
-    global color
-    color = cv2.applyColorMap(normalized, cv2.COLORMAP_HOT)
-    cv2.imshow('views', color)
-
-    global point
-    point = None
-
-    def handle_mouse(event, x, y, flags, param):
+    @staticmethod
+    def manual_predictor(depth_img):
         global last_lmb_event
-        global center
+        last_lmb_event = cv2.EVENT_LBUTTONUP
+
+        normalized = (255 * (depth_img.img - np.min(depth_img.img))/(np.max(depth_img.img) - np.min(depth_img.img))).astype(np.uint8)
         global color
-        global end
-        global start
+        color = cv2.applyColorMap(normalized, cv2.COLORMAP_HOT)
+        cv2.imshow('views', color)
+
         global point
+        point = None
 
-        # Mouse click
-        if event == cv2.EVENT_LBUTTONDOWN:
-            last_lmb_event = event
-            center = (x, y)
-        # Mouse release or drag
-        elif event == cv2.EVENT_LBUTTONUP:
-            last_lmb_event = event
-            point = param.to_object(center[::-1])
-        elif event == cv2.EVENT_MOUSEMOVE and last_lmb_event == cv2.EVENT_LBUTTONDOWN:
-            end = (x, y)
-            start = tuple(np.clip(np.subtract(np.multiply(center, 2), end), (0, 0), (299, 299)).astype(np.int))
-            to_draw = np.copy(color)
-            cv2.line(to_draw, start, end, (0, 255, 0), 2)
-            cv2.imshow('views', to_draw)
+        def handle_mouse(event, x, y, flags, param):
+            global last_lmb_event
+            global center
+            global color
+            global end
+            global start
+            global point
 
-    cv2.namedWindow('views')
-    cv2.setMouseCallback('views', handle_mouse, depth_img)
-    cv2.imshow('views', color)
-    while point is None:
-        cv2.waitKey(1)
-    return np.reshape(point, (1, 3)), None
+            # Mouse click
+            if event == cv2.EVENT_LBUTTONDOWN:
+                last_lmb_event = event
+                center = (x, y)
+            # Mouse release or drag
+            elif event == cv2.EVENT_LBUTTONUP:
+                last_lmb_event = event
+                point = param.to_object(center[::-1])
+            elif event == cv2.EVENT_MOUSEMOVE and last_lmb_event == cv2.EVENT_LBUTTONDOWN:
+                end = (x, y)
+                start = tuple(np.clip(np.subtract(np.multiply(center, 2), end), (0, 0), (299, 299)).astype(np.int))
+                to_draw = np.copy(color)
+                cv2.line(to_draw, start, end, (0, 255, 0), 2)
+                cv2.imshow('views', to_draw)
 
-def ros():
-    import rospy
-    from visualization_msgs.msg import Marker
-    import ros_numpy
-    from sensor_msgs.msg import PointCloud2
-    rospy.init_node('orthonet')
+        cv2.namedWindow('views')
+        cv2.setMouseCallback('views', handle_mouse, depth_img)
+        cv2.imshow('views', color)
+        while point is None:
+            cv2.waitKey(1)
+        cv2.destroyAllWindows()
+        global start, end
+        angle = np.arctan2(end[1] - start[1], end[0] - start[0])
+        rotation_axis = np.array([0, 1, 0])
+        width = np.abs(np.linalg.norm(depth_img.to_object(start[::-1]) - depth_img.to_object(end[::-1])))
 
-    pub = rospy.Publisher('marker', Marker, latch=True, queue_size=1)
-    cloud_data = rospy.wait_for_message('/camera/depth/points', PointCloud2)
-    xyzs = ros_numpy.point_cloud2.get_xyz_points(ros_numpy.numpify(cloud_data))
-    rospy.sleep(1)
-
-    onet = OrthoNet()
-    point = onet.predict(xyzs, roi=[-2, 1, -.15, .25, 0, 0.2], predictor=manual_predictor)
-
-    marker = Marker()
-
-    marker.header.frame_id = "camera_depth_optical_frame"
-    marker.header.stamp = rospy.Time.now()
-    marker.ns = 'debug'
-    marker.id = 1
-    marker.type = marker.SPHERE
-    marker.action = marker.ADD
-    marker.pose.orientation.w = 1
-    marker.pose.position.x = point[0, 0]
-    marker.pose.position.y = point[0, 1]
-    marker.pose.position.z = point[0, 2]
-    marker.scale.x = 0.01
-    marker.scale.y = 0.01
-    marker.scale.z = 0.01
-    marker.color.a = 1.0
-    marker.color.b = 1.0
-
-    # print 'sending'
-    # while not rospy.is_shutdown():
-    pub.publish(marker)
-    rospy.sleep(1)
+        return np.reshape(point, (1, 3)), rotation_axis, angle, width
 
 
 def render_prediction(cloud, point):
@@ -457,7 +409,6 @@ def render_prediction(cloud, point):
     viewer.set(point_size=0.0005)
 
 if __name__ == '__main__':
-    # ros()
     cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
     onet = OrthoNet()
     point, orientation = onet.predict(cloud.cloud, manual_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
