@@ -9,6 +9,41 @@ from skimage.filters import gaussian
 from scipy.spatial.transform import Rotation as R
 
 
+class Transform:
+    def __init__(self, pca):
+        self.pca = pca
+
+    def transform(self, cloud, axes=None):
+        """
+        Transforms from existing space to pca space
+        :param cloud: ndarray (N, 3) with the points to be transformed or PointCloud object
+        :return: ndarray(N, 3) with the transformed points
+        """
+        axes = axes or range(3)
+        assert len(axes) == self.pca.n_components_, 'Expected len of axes to be \'{}\', found \'{}\' instead'.format(self.pca.n_components_, len(axes))
+        points = cloud.cloud if isinstance(cloud, PointCloud) else cloud
+
+        transformed_redux = self.pca.transform(points[:, axes])
+        untouched_axes = list(set(range(3)) - set(axes))
+        transformed = np.insert(transformed_redux, untouched_axes, points[:, untouched_axes], axis=1)
+        return PointCloud(transformed) if isinstance(cloud, PointCloud) else transformed
+
+    def transform_inverse(self, cloud, axes=None):
+        """
+        Transforms from pca space to original space
+        :param points: ndarray (N, 3) with the points to be transformed
+        :return: ndarray(N, 3) with the transformed points
+        """
+        axes = axes or range(3)
+        assert len(axes) == self.pca.n_components_, 'Expected len of axes to be \'{}\', found \'{}\' instead'.format(self.pca.n_components_, len(axes))
+        points = cloud.cloud if isinstance(cloud, PointCloud) else cloud
+
+        transformed_redux = self.pca.inverse_transform(points[:, axes])
+        untouched_axes = list(set(range(3)) - set(axes))
+        transformed = np.insert(transformed_redux, untouched_axes, points[:, untouched_axes], axis=1)
+        return PointCloud(transformed) if isinstance(cloud, PointCloud) else transformed
+
+
 class Depth:
     def __init__(self, img, inverse_transform, pixel_radius, index):
         self.img = img
@@ -51,7 +86,6 @@ class PointCloud:
     def __init__(self, cloud):
         self.cloud = cloud
         self.pca_ = None
-        self._axes = [0, 1, 2]
 
     def __getitem__(self, item):
         return self.cloud[item]
@@ -177,11 +211,10 @@ class PointCloud:
         Uses PCA to center cloud around mean and orient it along its principal axes
         :param axes: axes or features to perform the analysis on. If None all axes are used
         """
-        if axes is not None:
-            self._axes = axes
-        self.pca_ = PCA()
-        self.pca_.fit(self.cloud[:, self._axes])
-        return PointCloud(self.transform(self.cloud))
+        assert self.cloud.size > 0, 'Can\'t do PCA on an empty cloud'
+        axes = axes or range(3)
+        transform = Transform(PCA().fit(self.cloud[:, axes]))
+        return transform.transform(self, axes=axes), transform
 
     def transform_inverse(self, points):
         """
@@ -287,6 +320,36 @@ class OrthoNet:
         self.cloud = None
 
     def predict(self, cloud, predictor, roi=None):
+        """
+        Yields a point and orientation for a grasp in the point cloud
+        :param cloud: Point cloud (ndarray of shape N, 3)
+        :param predictor: callback to predict position and angle on a depth image
+        :param roi: ROI in the cloud w.r.t work surface
+        :return: position, orientation
+        """
+        roi = roi or [-np.inf, np.inf] * 3
+
+        # Forward transform
+        camera_cloud = PointCloud(cloud)
+        plane_cloud = camera_cloud.find_plane()
+        plane_cloud, tf_camera_to_plane = plane_cloud.pca()
+        table_cloud = tf_camera_to_plane.transform(camera_cloud)
+        roi_cloud = table_cloud.filter_roi(roi)
+        object_cloud = roi_cloud.remove_plane()
+        object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])
+
+        # Prediction
+        position, orientation = predictor(object_cloud.top_depth)
+
+        # Backwards transform
+        position = position.reshape((1, 3))
+        roi_position = tf_roi_to_object.transform_inverse(position, axes=[0, 1])
+        # render_prediction(roi_cloud, roi_position)
+        camera_position = tf_camera_to_plane.transform_inverse(roi_position)
+
+        return camera_position, None
+
+    def predict_old(self, cloud, predictor, roi=None):
         if roi is None:
             roi = [-np.inf, np.inf] * 3
         self.cloud = PointCloud(cloud)
@@ -295,13 +358,6 @@ class OrthoNet:
         wrt_table_cloud = PointCloud(plane_cloud.transform(self.cloud.cloud))
         wrt_table_cloud = wrt_table_cloud.filter_roi(roi)
         wrt_table_cloud = wrt_table_cloud.remove_plane()
-        assert wrt_table_cloud.cloud.size > 0
-        # wo_table = wrt_table_cloud.remove_plane()
-        # while wo_table.cloud.size == 0:
-        #     print 'Plane removal was not successful, trying again'
-        #     wo_table = wrt_table_cloud.remove_plane()
-        # wrt_table_cloud = wo_table
-        global wrt_object_cloud
         wrt_object_cloud = wrt_table_cloud.pca(axes=[0, 1])
 
         depth = wrt_object_cloud.top_depth
@@ -311,81 +367,6 @@ class OrthoNet:
         point_wrt_world = plane_cloud.transform_inverse(point_wrt_table)
 
         return point_wrt_world
-
-
-
-
-    def predict_debug(self, cloud, roi=None):
-        if roi is None:
-            roi = [-np.inf, np.inf] * 3
-        self.cloud = PointCloud(cloud)
-        plane_cloud = self.cloud.find_plane()
-        plane_cloud.pca()
-        wrt_table_cloud = PointCloud(plane_cloud.transform(self.cloud.cloud))
-        wrt_table_cloud = wrt_table_cloud.filter_roi(roi)
-        wo_table = wrt_table_cloud.remove_plane()
-        while wo_table.cloud.size == 0:
-            print 'Plane removal was not successful, trying again'
-            wo_table = wrt_table_cloud.remove_plane()
-        wrt_table_cloud = wo_table
-        global wrt_object_cloud
-        wrt_object_cloud = wrt_table_cloud.pca(axes=[0, 1])
-
-        # front = wrt_object_cloud.front_depth
-        global right
-        right = wrt_object_cloud.top_depth
-        # top = wrt_object_cloud.top_depth
-
-        global last_lmb_event
-        last_lmb_event = cv2.EVENT_LBUTTONUP
-
-        global center
-        center = (0, 0)
-
-        def handle_mouse(event, x, y, flags, param):
-            global last_lmb_event
-            global center
-            global color
-            global right
-            global end
-            global start
-            global wrt_object_cloud
-
-            # Mouse click
-            if event == cv2.EVENT_LBUTTONDOWN:
-                print 'Mouse clicked at {}'.format((x, y))
-                last_lmb_event = event
-                center = (x, y)
-            # Mouse release or drag
-            elif event == cv2.EVENT_LBUTTONUP:
-                print 'Mouse released at {}'.format((x, y))
-                last_lmb_event = event
-                # depth = right.img[center[::-1]]
-                # print depth
-                cloud = wrt_object_cloud.cloud
-                point = right.to_object(center[::-1])
-                points = np.concatenate((cloud, np.reshape(point, (1, 3))))
-                viewer = pptk.viewer(points)
-                viewer.attributes(np.concatenate((np.ones(cloud.shape), [[1, 0, 0]])))
-                viewer.set(point_size=0.001)
-            elif event == cv2.EVENT_MOUSEMOVE and last_lmb_event == cv2.EVENT_LBUTTONDOWN:
-                end = (x, y)
-                start = tuple(np.clip(np.subtract(np.multiply(center, 2), end), (0, 0), (299, 299)).astype(np.int))
-                to_draw = np.copy(color)
-                cv2.line(to_draw, start, end, (0, 255, 0), 2)
-                cv2.imshow('views', to_draw)
-
-        cv2.namedWindow('views')
-        cv2.setMouseCallback('views', handle_mouse)
-        normalized = (255 * (right.img - np.min(right.img))/(np.max(right.img) - np.min(right.img))).astype(np.uint8)
-        global color
-        color = cv2.applyColorMap(normalized, cv2.COLORMAP_HOT)
-        cv2.imshow('views', color)
-        print 'image rendered'
-        while True:
-            key_press = cv2.waitKey()
-            if key_press is 113:
-                break
 
 
 def manual_predictor(depth_img):
@@ -468,13 +449,16 @@ def ros():
     pub.publish(marker)
     rospy.sleep(1)
 
+
+def render_prediction(cloud, point):
+    points = np.concatenate((cloud.cloud, point))
+    viewer = pptk.viewer(points)
+    viewer.attributes(np.concatenate((np.ones(cloud.cloud.shape), [[0, 0, 1]])))
+    viewer.set(point_size=0.0005)
+
 if __name__ == '__main__':
-    ros()
-    # cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
-    # onet = OrthoNet()
-    # # onet.predict_debug(cloud, roi=[-2, 1, -.15, .25, 0, 0.2])
-    # point = onet.predict(cloud, manual_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
-    # points = np.concatenate((cloud.cloud, point))
-    # viewer = pptk.viewer(points)
-    # viewer.attributes(np.concatenate((np.ones(cloud.cloud.shape), [[0, 0, 1]])))
-    # viewer.set(point_size=0.001)
+    # ros()
+    cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
+    onet = OrthoNet()
+    point, orientation = onet.predict(cloud.cloud, manual_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
+    # render_prediction(cloud, point)
