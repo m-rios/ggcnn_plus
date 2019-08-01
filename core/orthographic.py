@@ -21,7 +21,7 @@ class Transform:
         """
         axes = axes or range(3)
         assert len(axes) == self.pca.n_components_, 'Expected len of axes to be \'{}\', found \'{}\' instead'.format(self.pca.n_components_, len(axes))
-        points = cloud.cloud if isinstance(cloud, PointCloud) else cloud
+        points = cloud if not isinstance(cloud, PointCloud) else cloud.cloud
 
         transformed_redux = self.pca.transform(points[:, axes])
         untouched_axes = list(set(range(3)) - set(axes))
@@ -36,7 +36,7 @@ class Transform:
         """
         axes = axes or range(3)
         assert len(axes) == self.pca.n_components_, 'Expected len of axes to be \'{}\', found \'{}\' instead'.format(self.pca.n_components_, len(axes))
-        points = cloud.cloud if isinstance(cloud, PointCloud) else cloud
+        points = cloud if not isinstance(cloud, PointCloud) else cloud.cloud
 
         transformed_redux = self.pca.inverse_transform(points[:, axes])
         untouched_axes = list(set(range(3)) - set(axes))
@@ -339,21 +339,31 @@ class OrthoNet:
         object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])
 
         # Prediction
-        position, orientation, angle, width = predictor(object_cloud.right_depth)
+        position, orientation, angle, width = predictor(object_cloud.top_depth, 2)
+
+        # marker = grasp_marker(position, orientation, angle, width)
+        marker = np.linspace(point, point + orientation, 1e3).squeeze()
+        render_prediction(object_cloud, marker)
 
         # Backwards transform
         roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
         roi_orientation = tf_roi_to_object.transform_inverse(orientation.reshape((1, 3)), axes=[0, 1])
-        # render_prediction(roi_cloud, roi_position)
+
+        # marker = np.linspace(roi_position, roi_position + roi_orientation, 1e3).squeeze()
+        # render_prediction(roi_cloud, marker)
+
         camera_position = tf_camera_to_plane.transform_inverse(roi_position)
         camera_orientation = tf_camera_to_plane.transform_inverse(roi_orientation)
         roi_com = tf_camera_to_plane.transform_inverse(np.zeros((1, 3)))
-        camera_orientation += roi_com
+        camera_orientation -= roi_com
+
+        # marker = np.linspace(camera_position, camera_position + camera_orientation, 1e3).squeeze()
+        # render_prediction(camera_cloud, marker)
 
         return camera_position, camera_orientation, angle, width
 
     @staticmethod
-    def manual_predictor(depth_img):
+    def manual_predictor(depth_img, index):
         global last_lmb_event
         last_lmb_event = cv2.EVENT_LBUTTONUP
 
@@ -394,22 +404,50 @@ class OrthoNet:
         while point is None:
             cv2.waitKey(1)
         cv2.destroyAllWindows()
+
         global start, end
+        width = np.abs(np.linalg.norm(depth_img.to_object(end[::-1]) - depth_img.to_object(start[::-1])))
+        rotation_axis = np.insert(np.zeros(2), index, 1).reshape((1, 3))
+        # width = 0
+
+        start = np.array(start)
+        start[1] = 299 - start[1]
+        end = np.array(end)
+        end[1] = 299 - end[1]
         angle = np.arctan2(end[1] - start[1], end[0] - start[0])
-        rotation_axis = np.array([0, 1, 0])
-        width = np.abs(np.linalg.norm(depth_img.to_object(start[::-1]) - depth_img.to_object(end[::-1])))
 
         return np.reshape(point, (1, 3)), rotation_axis, angle, width
 
 
-def render_prediction(cloud, point):
-    points = np.concatenate((cloud.cloud, point))
+def render_prediction(cloud, marker):
+    points = np.concatenate((cloud.cloud, marker))
     viewer = pptk.viewer(points)
-    viewer.attributes(np.concatenate((np.ones(cloud.cloud.shape), [[0, 0, 1]])))
+    blues = np.repeat([[0, 0, 1]], marker.shape[0], axis=0)
+    viewer.attributes(np.concatenate((np.ones(cloud.cloud.shape), blues)))
     viewer.set(point_size=0.0005)
+
+
+def grasp_marker(point, orientation, angle, width):
+    points = np.linspace([-width/2., 0, 0], [width/2., 0, 0], int(1e3))
+    orientation = orientation / np.linalg.norm(orientation)
+    angle = np.mod(angle, np.pi*2)
+    r = R.from_rotvec(orientation * angle)
+    points = r.apply(points)
+    points += point
+    return points
+
 
 if __name__ == '__main__':
     cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
     onet = OrthoNet()
-    point, orientation = onet.predict(cloud.cloud, manual_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
-    # render_prediction(cloud, point)
+    point, orientation, angle, width = onet.predict(cloud.cloud, OrthoNet.manual_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
+
+    marker = np.linspace(point, point + orientation, 1e3).squeeze()
+    render_prediction(cloud, marker)
+
+    # points = np.linspace([-width/2., 0, 0], [width/2., 0, 0], int(10e3))
+    # r = R.from_rotvec(orientation * angle)
+    # points = r.apply(points)
+    # points += point
+    points = grasp_marker(point, orientation, angle, width)
+    # render_prediction(cloud, points)
