@@ -340,11 +340,9 @@ class OrthoNet:
 
         # Prediction
         position, z, y, width = predictor(object_cloud.top_depth, 2)
-        angle = y
         # marker = grasp_marker(position, orientation, angle, width)
         # marker = np.linspace(point, point + orientation, 1e3).squeeze()
-        # render_prediction(object_cloud, marker)
-        render_pose(object_cloud.cloud, position, z, y)
+        render_pose(object_cloud, position, z, y)
 
         # Backwards transform
         roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
@@ -352,7 +350,8 @@ class OrthoNet:
         roi_y = tf_roi_to_object.transform_inverse(y.reshape((1, 3)), axes=[0, 1])
 
         # marker = np.linspace(roi_position, roi_position + roi_orientation, 1e3).squeeze()
-        render_prediction(roi_cloud, marker)
+        # render_prediction(roi_cloud, marker)
+        render_pose(roi_cloud, roi_position, roi_orientation, roi_y)
 
         camera_position = tf_camera_to_plane.transform_inverse(roi_position)
         camera_orientation = tf_camera_to_plane.transform_inverse(roi_orientation)
@@ -362,6 +361,7 @@ class OrthoNet:
         camera_y -= roi_com
         camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
         camera_y = camera_y / np.linalg.norm(camera_y)
+        render_pose(camera_cloud, camera_position, camera_orientation, camera_y)
 
         # marker = np.linspace(camera_position, camera_position + camera_orientation, 1e3).squeeze()
         # render_prediction(camera_cloud, marker)
@@ -414,7 +414,7 @@ class OrthoNet:
 
         global start, end
         width = np.abs(np.linalg.norm(depth_img.to_object(end[::-1]) - depth_img.to_object(start[::-1])))
-        z = np.insert(np.zeros(2), index, 1).reshape((1, 3))
+        z = np.insert(np.zeros(2), index, -1).reshape((1, 3))
         # width = 0
 
         start = np.array(start)
@@ -447,11 +447,13 @@ def grasp_marker(point, orientation, angle, width):
     return points
 
 def render_pose(cloud, position, z, y):
-    point = np.reshape(position, (1, 3))
-    z = np.linspace(position, position + z, 1e3)
-    y = np.linspace(position, position + y, 1e3)
-    colors = np.concatenate((np.ones((1, 3)), np.repeat([[0, 0, 1]], z.shape[0], axis=0), np.repeat([[0, 1, 0]], y.shape[0], axis=0)))
-    points = np.concatenate((cloud, point, z.squeeze(), y.squeeze()))
+    cloud = cloud.cloud
+    z_axis = np.linspace(position, position + z/10, 1e3).squeeze()
+    y_axis = np.linspace(position, position + y/10, 1e3).squeeze()
+    blue = np.repeat([[0, 0, 1]], z_axis.shape[0], axis=0)
+    green = np.repeat([[0, 1, 0]], y_axis.shape[0], axis=0)
+    colors = np.concatenate( (np.ones(cloud.shape), blue, green) )
+    points = np.concatenate((cloud, z_axis, y_axis))
     viewer = pptk.viewer(points)
     viewer.attributes(colors)
     viewer.set(point_size=0.0005)
@@ -462,12 +464,12 @@ if __name__ == '__main__':
     onet = OrthoNet()
     point, orientation, angle, width = onet.predict(cloud.cloud, OrthoNet.manual_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
 
-    marker = np.linspace(point, point + orientation, 1e3).squeeze()
-    render_prediction(cloud, marker)
+    # marker = np.linspace(point, point + orientation, 1e3).squeeze()
+    # render_prediction(cloud, marker)
 
-    # points = np.linspace([-width/2., 0, 0], [width/2., 0, 0], int(10e3))
-    # r = R.from_rotvec(orientation * angle)
-    # points = r.apply(points)
-    # points += point
-    points = grasp_marker(point, orientation, angle, width)
-    # render_prediction(cloud, points)
+    # # points = np.linspace([-width/2., 0, 0], [width/2., 0, 0], int(10e3))
+    # # r = R.from_rotvec(orientation * angle)
+    # # points = r.apply(points)
+    # # points += point
+    # points = grasp_marker(point, orientation, angle, width)
+    # # render_prediction(cloud, points)
