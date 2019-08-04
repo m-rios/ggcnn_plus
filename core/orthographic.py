@@ -430,7 +430,6 @@ class OrthoNet:
         global start, end
         img_axes = np.delete(range(3), index)
         width = np.abs(np.linalg.norm(depth_img.to_object(end[::-1])[img_axes] - depth_img.to_object(start[::-1])[img_axes]))
-        width = 0.1
         z = np.insert(np.zeros(2), index, -1).reshape((1, 3))
         # width = 0
 
