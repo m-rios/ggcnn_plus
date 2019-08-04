@@ -148,7 +148,7 @@ class PointCloud:
         r = R.from_rotvec(axis*angle)
         return PointCloud(r.apply(self.cloud))
 
-    def to_depth(self, shape=300, index=0, padding=7, pixel_radius=1):
+    def to_depth(self, shape=300, index=0, padding=7, pixel_radius=3):
         """
         Construct depth image from point cloud
         :param shape: output shape of the depth image (only one value, output is squared)
@@ -339,35 +339,36 @@ class OrthoNet:
         object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])
 
         # Prediction
-        position, z, y, width = predictor(object_cloud.top_depth, 2)
-        # marker = grasp_marker(position, orientation, angle, width)
-        # marker = np.linspace(point, point + orientation, 1e3).squeeze()
-        render_pose(object_cloud, position, z, y)
+        depths = [object_cloud.front_depth, object_cloud.right_depth, object_cloud.top_depth]
+        positions = []
+        zs = []
+        ys = []
+        widths = []
+        for index, depth in enumerate(depths):
+            pass
+            position, z, y, width = predictor(depth, index)
+            # render_pose(object_cloud, position, z, y)
 
-        # Backwards transform
-        roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
-        roi_orientation = tf_roi_to_object.transform_inverse(z.reshape((1, 3)), axes=[0, 1])
-        roi_y = tf_roi_to_object.transform_inverse(y.reshape((1, 3)), axes=[0, 1])
+            # Backwards transform
+            roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
+            roi_orientation = tf_roi_to_object.transform_inverse(z.reshape((1, 3)), axes=[0, 1])
+            roi_y = tf_roi_to_object.transform_inverse(y.reshape((1, 3)), axes=[0, 1])
 
-        # marker = np.linspace(roi_position, roi_position + roi_orientation, 1e3).squeeze()
-        # render_prediction(roi_cloud, marker)
-        render_pose(roi_cloud, roi_position, roi_orientation, roi_y)
+            camera_position = tf_camera_to_plane.transform_inverse(roi_position)
+            camera_orientation = tf_camera_to_plane.transform_inverse(roi_orientation)
+            camera_y = tf_camera_to_plane.transform_inverse(roi_y)
+            roi_com = tf_camera_to_plane.transform_inverse(np.zeros((1, 3)))
+            camera_orientation -= roi_com
+            camera_y -= roi_com
+            camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
+            camera_y = camera_y / np.linalg.norm(camera_y)
 
-        camera_position = tf_camera_to_plane.transform_inverse(roi_position)
-        camera_orientation = tf_camera_to_plane.transform_inverse(roi_orientation)
-        camera_y = tf_camera_to_plane.transform_inverse(roi_y)
-        roi_com = tf_camera_to_plane.transform_inverse(np.zeros((1, 3)))
-        camera_orientation -= roi_com
-        camera_y -= roi_com
-        camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
-        camera_y = camera_y / np.linalg.norm(camera_y)
-        render_pose(camera_cloud, camera_position, camera_orientation, camera_y)
+            positions.append(camera_position)
+            zs.append(camera_orientation/np.linalg.norm(camera_orientation))
+            ys.append(camera_y/np.linalg.norm(camera_y))
+            widths.append(width)
 
-        # marker = np.linspace(camera_position, camera_position + camera_orientation, 1e3).squeeze()
-        # render_prediction(camera_cloud, marker)
-
-        return camera_position, camera_orientation, camera_y, width
-        # return camera_position, camera_orientation, angle, width
+        return positions, zs, ys, widths
 
     @staticmethod
     def manual_predictor(depth_img, index):
