@@ -320,7 +320,7 @@ class OrthoNet:
         self.cloud = None
         self.network = None
         if model_fn is not None:
-            from core.network import Network, get_grasps_from_output
+            from core.network import Network
             self.network = Network(model_fn=model_fn)
 
     def predict(self, cloud, predictor, roi=None):
@@ -335,12 +335,18 @@ class OrthoNet:
 
         # Forward transform
         camera_cloud = PointCloud(cloud)
-        plane_cloud = camera_cloud.find_plane()
-        plane_cloud, tf_camera_to_plane = plane_cloud.pca()
-        table_cloud = tf_camera_to_plane.transform(camera_cloud)
-        roi_cloud = table_cloud.filter_roi(roi)
-        object_cloud = roi_cloud.remove_plane()
-        object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])
+        while True:
+            try:
+                plane_cloud = camera_cloud.find_plane()
+                plane_cloud, tf_camera_to_plane = plane_cloud.pca()
+                table_cloud = tf_camera_to_plane.transform(camera_cloud)
+                roi_cloud = table_cloud.filter_roi(roi)
+                object_cloud = roi_cloud.remove_plane()
+                object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])
+            except AssertionError as e:
+                print('Caught error: {}, retrying'.format(e))
+                continue
+            break
 
         # Prediction
         depths = [object_cloud.front_depth, object_cloud.right_depth, object_cloud.top_depth]
@@ -373,13 +379,29 @@ class OrthoNet:
 
         return positions, zs, ys, widths
 
-    @staticmethod
-    def network_predictor(depth_img, index):
+    def network_predictor(self, depth_img, index, debug=True):
+        from core.network import get_grasps_from_output
         positions, angles, widths = self.network.predict(depth_img.img)
         gs = get_grasps_from_output(positions, angles, widths)
+        if debug:
+            from core.network import get_output_plot
+            fig = get_output_plot(depth_img.img, positions, angles, widths)
+            plt.ion()
+            plt.show()
+            plt.pause(.1)
         assert len(gs) > 0
         grasp = gs[0]
         point = depth_img.to_object(grasp.center)
+
+        delta = np.array([np.cos(grasp.angle), np.sin(grasp.angle)]) * grasp.width / 2.
+        start = np.subtract(grasp.center, delta).astype(np.int)
+        end = np.add(grasp.center, delta).astype(np.int)
+        img_axes = np.delete(range(3), index)
+        width = np.abs(np.linalg.norm(depth_img.to_object(end)[img_axes] - depth_img.to_object(start)[img_axes]))
+
+        y = np.subtract(end, start)
+        y = y / np.linalg.norm(y)
+        y = np.insert(y, index, 0)
 
         z = np.insert(np.zeros(2), index, -1).reshape((1, 3))
         return point.reshape((1, 3)), z, y, width
@@ -460,9 +482,12 @@ def render_pose(cloud, position, z, y, width):
 
 
 if __name__ == '__main__':
+    import pylab as plt
     cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
-    onet = OrthoNet()
-    point, orientation, angle, width = onet.predict(cloud.cloud, OrthoNet.manual_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
+    onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/results/beam_search_last/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
+    point, orientation, angle, width = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
+
+    raw_input('Press ENTER to quit')
 
     # marker = np.linspace(point, point + orientation, 1e3).squeeze()
     # render_prediction(cloud, marker)
