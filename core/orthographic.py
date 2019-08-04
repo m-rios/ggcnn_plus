@@ -316,8 +316,12 @@ class PointCloud:
 
 
 class OrthoNet:
-    def __init__(self):
+    def __init__(self, model_fn=None):
         self.cloud = None
+        self.network = None
+        if model_fn is not None:
+            from core.network import Network, get_grasps_from_output
+            self.network = Network(model_fn=model_fn)
 
     def predict(self, cloud, predictor, roi=None):
         """
@@ -345,9 +349,8 @@ class OrthoNet:
         ys = []
         widths = []
         for index, depth in enumerate(depths):
-            pass
             position, z, y, width = predictor(depth, index)
-            # render_pose(object_cloud, position, z, y)
+            render_pose(object_cloud, position, z, y, width)
 
             # Backwards transform
             roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
@@ -369,6 +372,17 @@ class OrthoNet:
             widths.append(width)
 
         return positions, zs, ys, widths
+
+    @staticmethod
+    def network_predictor(depth_img, index):
+        positions, angles, widths = self.network.predict(depth_img.img)
+        gs = get_grasps_from_output(positions, angles, widths)
+        assert len(gs) > 0
+        grasp = gs[0]
+        point = depth_img.to_object(grasp.center)
+
+        z = np.insert(np.zeros(2), index, -1).reshape((1, 3))
+        return point.reshape((1, 3)), z, y, width
 
     @staticmethod
     def manual_predictor(depth_img, index):
@@ -414,7 +428,9 @@ class OrthoNet:
         cv2.destroyAllWindows()
 
         global start, end
-        width = np.abs(np.linalg.norm(depth_img.to_object(end[::-1]) - depth_img.to_object(start[::-1])))
+        img_axes = np.delete(range(3), index)
+        width = np.abs(np.linalg.norm(depth_img.to_object(end[::-1])[img_axes] - depth_img.to_object(start[::-1])[img_axes]))
+        width = 0.1
         z = np.insert(np.zeros(2), index, -1).reshape((1, 3))
         # width = 0
 
@@ -422,38 +438,22 @@ class OrthoNet:
         start[1] = 299 - start[1]
         end = np.array(end)
         end[1] = 299 - end[1]
-        angle = np.arctan2(end[1] - start[1], end[0] - start[0])
+        # angle = np.arctan2(end[1] - start[1], end[0] - start[0])
 
-        y = [end[0] - start[0], end[1] - start[0], 0]
+        y = np.insert([end[0] - start[0], end[1] - start[1]], index, 0)
         y = y / np.linalg.norm(y)
 
         return np.reshape(point, (1, 3)), z, y, width
 
-
-def render_prediction(cloud, marker):
-    points = np.concatenate((cloud.cloud, marker))
-    viewer = pptk.viewer(points)
-    blues = np.repeat([[0, 0, 1]], marker.shape[0], axis=0)
-    viewer.attributes(np.concatenate((np.ones(cloud.cloud.shape), blues)))
-    viewer.set(point_size=0.0005)
-
-
-def grasp_marker(point, orientation, angle, width):
-    points = np.linspace([-width/2., 0, 0], [width/2., 0, 0], int(1e3))
-    orientation = orientation / np.linalg.norm(orientation)
-    angle = np.mod(angle, np.pi*2)
-    r = R.from_rotvec(orientation * angle)
-    points = r.apply(points)
-    points += point
-    return points
-
-def render_pose(cloud, position, z, y):
+def render_pose(cloud, position, z, y, width):
     cloud = cloud.cloud
-    z_axis = np.linspace(position, position + z/10, 1e3).squeeze()
-    y_axis = np.linspace(position, position + y/10, 1e3).squeeze()
+    z *= width
+    y *= width/2.
+    z_axis = np.linspace(position, position + z, 1e3).squeeze()
+    y_axis = np.linspace(position - y, position + y, 1e3).squeeze()
     blue = np.repeat([[0, 0, 1]], z_axis.shape[0], axis=0)
     green = np.repeat([[0, 1, 0]], y_axis.shape[0], axis=0)
-    colors = np.concatenate( (np.ones(cloud.shape), blue, green) )
+    colors = np.concatenate((np.ones(cloud.shape), blue, green))
     points = np.concatenate((cloud, z_axis, y_axis))
     viewer = pptk.viewer(points)
     viewer.attributes(colors)
