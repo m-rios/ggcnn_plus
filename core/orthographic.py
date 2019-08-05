@@ -52,6 +52,9 @@ class Depth:
 
         self._apply_radius(pixel_radius)
         self.fill_missing()
+        self.blur(2.)
+        # Invert values (furthest from the camera should have the highest value)
+        self.img *= -1
 
     def _apply_radius(self, pixel_radius):
         filled = np.argwhere(np.logical_not(np.isinf(self.img)))
@@ -70,7 +73,9 @@ class Depth:
 
     def fill_missing(self):
         missing_idx = np.isinf(self.img)
-        fill_value = np.min(self.img[np.logical_not(missing_idx)])
+        not_missing = self.img[np.logical_not(missing_idx)]
+        mean, sigma = not_missing.mean(), not_missing.std()
+        fill_value = mean - 2*sigma
         self.img[missing_idx] = fill_value
 
     def to_object(self, uv):
@@ -385,7 +390,7 @@ class OrthoNet:
         gs = get_grasps_from_output(positions, angles, widths)
         if debug:
             from core.network import get_output_plot
-            fig = get_output_plot(depth_img.img, positions, angles, widths)
+            get_output_plot(depth_img.img, positions, angles, widths)
             plt.ion()
             plt.show()
             plt.pause(.1)
@@ -487,6 +492,7 @@ if __name__ == '__main__':
     onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/results/beam_search_last/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
     point, orientation, angle, width = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
 
+    plt.pause(1e5)
     raw_input('Press ENTER to quit')
 
     # marker = np.linspace(point, point + orientation, 1e3).squeeze()
