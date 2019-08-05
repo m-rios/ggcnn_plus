@@ -53,8 +53,6 @@ class Depth:
         self._apply_radius(pixel_radius)
         self.fill_missing()
         self.blur(2.)
-        # Invert values (furthest from the camera should have the highest value)
-        self.img *= -1
 
     def _apply_radius(self, pixel_radius):
         filled = np.argwhere(np.logical_not(np.isinf(self.img)))
@@ -77,6 +75,11 @@ class Depth:
         mean, sigma = not_missing.mean(), not_missing.std()
         fill_value = mean - 2*sigma
         self.img[missing_idx] = fill_value
+
+        # Old version
+        # missing_idx = np.isinf(self.img)
+        # fill_value = np.min(self.img[np.logical_not(missing_idx)])
+        # self.img[missing_idx] = fill_value
 
     def to_object(self, uv):
         uv = np.array(uv)
@@ -386,7 +389,7 @@ class OrthoNet:
 
     def network_predictor(self, depth_img, index, debug=True):
         from core.network import get_grasps_from_output
-        positions, angles, widths = self.network.predict(depth_img.img)
+        positions, angles, widths = self.network.predict(-depth_img.img)
         gs = get_grasps_from_output(positions, angles, widths)
         if debug:
             from core.network import get_output_plot
