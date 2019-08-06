@@ -20,13 +20,23 @@ class Transform:
         :return: ndarray(N, 3) with the transformed points
         """
         axes = axes or range(3)
+        original_shape = None
         assert len(axes) == self.pca.n_components_, 'Expected len of axes to be \'{}\', found \'{}\' instead'.format(self.pca.n_components_, len(axes))
-        points = cloud if not isinstance(cloud, PointCloud) else cloud.cloud
+        if isinstance(cloud, PointCloud):
+            points = cloud.cloud
+        else:
+            points = np.array(cloud)
+            if points.ndim == 1:
+                points = points.reshape((1, 3))
 
         transformed_redux = self.pca.transform(points[:, axes])
         untouched_axes = list(set(range(3)) - set(axes))
         transformed = np.insert(transformed_redux, untouched_axes, points[:, untouched_axes], axis=1)
-        return PointCloud(transformed) if isinstance(cloud, PointCloud) else transformed
+        if isinstance(cloud, PointCloud):
+            return PointCloud(transformed)
+        elif original_shape is not None:
+            return transformed.reshape(original_shape)
+        return transformed
 
     def transform_inverse(self, cloud, axes=None):
         """
@@ -356,6 +366,12 @@ class OrthoNet:
                 continue
             break
 
+        camera_center = tf_camera_to_plane.transform([0, 0, 0])
+        camera_target = tf_camera_to_plane.transform([0, 0, 1])
+        camera_center = tf_roi_to_object.transform(camera_center, axes=[0, 1])
+        camera_target = tf_roi_to_object.transform(camera_target, axes=[0, 1])
+        render_pose(object_cloud, camera_center, camera_target - camera_center, np.array([[0., 1., 0.]]), 0.1)
+
         # Prediction
         depths = [object_cloud.front_depth, object_cloud.right_depth, object_cloud.top_depth]
         positions = []
@@ -364,7 +380,7 @@ class OrthoNet:
         widths = []
         for index, depth in enumerate(depths):
             position, z, y, width = predictor(depth, index)
-            render_pose(object_cloud, position, z, y, width)
+            # render_pose(object_cloud, position, z, y, width)
 
             # Backwards transform
             roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
@@ -491,7 +507,7 @@ def render_pose(cloud, position, z, y, width):
 
 if __name__ == '__main__':
     import pylab as plt
-    cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
+    cloud = PointCloud.from_npy('../test/points.npy')
     onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/results/beam_search_last/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
     point, orientation, angle, width = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
 
