@@ -1,10 +1,10 @@
 DIR="$(dirname "$0" )"
 DATA=$DIR/data
 export GGCNN_SCENES_PATH=$DATA/scenes
-export SHAPENET_PATH=$DATA/datasets/raw/ShapeNetSem
+export SHAPENET_PATH=$DATA/datasets/raw/shapenet40
 export JACQUARD_PATH=$DATA/datasets/raw/jacquard_samples
 export PREPROCESSED_PATH=$DATA/datasets/preprocessed
 export SIM_LOG_PATH=$DATA/results/sim_logs
 export RESULTS_PATH=$DATA/results
-export MODELS_PATH=$DATA/3d_models/ShapeNetSem
+export MODELS_PATH=$DATA/3d_models/shapenet40
 export VHACD_PATH=''
