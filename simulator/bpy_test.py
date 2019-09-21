@@ -1,7 +1,7 @@
 import bpy
 import sys
 
-BLENDER_SCENES_PATH='/run/media/mario/256D52764756BC25/blender scenes'
+BLENDER_SCENES_PATH='/Users/mario/Developer/msc-thesis/data/3d_models/blender_scenes'
 obj_fn = sys.argv[-1]
 obj_id = obj_fn.split('/')[-1].replace('.obj', '')
 bpy.ops.import_scene.obj(filepath=obj_fn)

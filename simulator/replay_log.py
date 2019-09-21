@@ -32,5 +32,5 @@ for log_fn in log_fns:
         sim.start_log(video_fn)
     sim.replay(log_fn, scene, args.models)
     if args.convert:
-        sim.stop_log
+        sim.stop_log()
 

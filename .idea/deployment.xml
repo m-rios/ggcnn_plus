@@ -14,6 +14,22 @@
             <excludedPath local="true" path="$PROJECT_DIR$/data" />
             <excludedPath path="msc-thesis/.gpu" />
             <excludedPath local="true" path="$PROJECT_DIR$/test/depth_inpainted.npy" />
+            <excludedPath local="true" path="$PROJECT_DIR$/simulator/data" />
+          </excludedPaths>
+        </serverdata>
+      </paths>
+      <paths name="Ubuntu">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/Developer/msc-thesis" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/.venv" />
+            <excludedPath path="/home/mario/Developer/msc-thesis/.cpu" />
+            <excludedPath path="/home/mario/Developer/msc-thesis/.gpu" />
+            <excludedPath local="true" path="$PROJECT_DIR$/data" />
+            <excludedPath path="/home/mario/Developer/msc-thesis/.gpu" />
+            <excludedPath local="true" path="$PROJECT_DIR$/test/depth_inpainted.npy" />
           </excludedPaths>
         </serverdata>
       </paths>

@@ -12,7 +12,7 @@ if __name__ == '__main__':
     SCENES_PATH = os.environ['GGCNN_SCENES_PATH']
     MODELS_PATH = os.environ['MODELS_PATH']
 
-    sim.add_gripper('gripper.urdf')
+    sim.add_gripper('/Users/mario/Developer/msc-thesis/simulator/gripper/wsg50_one_motor_gripper_free_base.sdf')
     fs, zs, ts = sim.move_test([0.1, 0.1, 0.3, 0, 0, 0])
     zs0 = np.array(zs) * 10000
     fs0 = np.array([np.array(x) for x in fs])

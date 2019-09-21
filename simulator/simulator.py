@@ -241,8 +241,8 @@ class Camera(object):
 @auto_str
 class Simulator:
 
-    def __init__(self, gui=False, use_egl=True, timeout=2, timestep=1e-4, debug=False,
-            epochs=10000, stop_th=1e-6, g=-10, bin_pos=[1.5, 1.5, 0.01]):
+    def __init__(self, gui=False, use_egl=True, timeout=2, timestep=1e-3, debug=False,
+            epochs=10000, stop_th=1e-4, g=-10, bin_pos=[1.5, 1.5, 0.01], visual_model=False):
         self.gui = gui
         self.debug = debug
         self.epochs = epochs
@@ -251,6 +251,7 @@ class Simulator:
         self.timestep = timestep
         self.timeout = timeout
         self.bin_pos = bin_pos
+        self.visual_model = visual_model
 
         if gui:
             self.client = p.connect(p.GUI)
@@ -273,6 +274,9 @@ class Simulator:
         self.obj_ids = {}
         self.cam = Camera(debug=debug)
         self.logger = None
+
+    def __del__(self):
+        p.disconnect()
 
     @property
     def bodies(self):
@@ -299,9 +303,9 @@ class Simulator:
 
         return bid
 
-    def read_scale(self, obj_id):
+    def read_scale(self, obj_id, obj_path):
         try:
-            scales = pd.read_csv(MODULE_PATH + '/scales.csv')
+            scales = pd.read_csv(obj_path + '/scales.csv')
             scales.set_index('obj_id', inplace=True)
             return scales.loc[obj_id].scale
         except Exception as e:
@@ -309,16 +313,17 @@ class Simulator:
             return 1
 
     def load_scale(self, fn, pos=None, ori=None, scale=1):
-        visual_fn =fn
         collision_fn = fn.replace('.obj', '_vhacd.obj')
-        visual_fn = collision_fn
-        obj_id = fn.split('/')[-1].replace('.obj', '')
-
         if not os.path.exists(collision_fn):
             print('''No collision model for {} was found. Falling back to
                     visual model as collision geometry. This might impact
-                    performance of your simulation''').format(visual_fn)
-            collision_fn = visual_fn
+                    performance of your simulation''').format(fn)
+            collision_fn = fn
+        visual_fn = fn if self.visual_model else collision_fn
+
+        obj_id = fn.split('/')[-1].replace('.obj', '')
+
+
 
         obj = Wavefront(visual_fn)
         size = obj.size
@@ -433,7 +438,6 @@ class Simulator:
             self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
 
         # Pre grasp pose
-         
 
     def evaluate_grasp(self, pose, width):
         if not self.gid:
@@ -577,55 +581,55 @@ class Simulator:
     def open_gripper(self):
         self.set_gripper_width(0.3)
 
-    def set_gripper_width(self, width, vel=0.3, force=10000):
+    def set_gripper_width(self, width, vel=0.3, force=1000):
         width = 0.3 - width
         for joint in [6,7]:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                     targetPosition=width/2.,targetVelocity=0, maxVelocity=vel,
                     force=force)
-        self.run(epochs=int(1/self.timestep))
+        self.run(epochs=int(0.6/self.timestep))
 
-    def move_gripper_to_old(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.3, angvel=1):
+    # def move_gripper_to_old(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.3, angvel=1):
+    #     max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
+    #     timeout = max_dist/linvel
+    #     try:
+    #         ang_tol = ang_tol*np.pi/180.
+    #         pose[2] += 0.02
+    #         # Linear joinst
+    #         for joint in range(3):
+    #             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+    #                     targetPosition=pose[joint], maxVelocity=linvel)
+    #         # Rotational joints
+    #         for joint in [3, 4, 5]:
+    #             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+    #                     targetPosition=pose[joint], maxVelocity=angvel)
+    #         for _ in range(int(timeout/self.timestep)):
+    #             state = p.getLinkState(self.gid, 5)
+    #             pos = np.array(state[0])
+    #             ori = np.array(p.getEulerFromQuaternion(state[1]))
+    #             ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
+    #             #print('Offset {} {}'.format(pose[0:3] - pos,
+    #             #    pose[3:6] - ori))
+    #             if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
+    #                 print('Arrived within tolerance')
+    #                 break
+    #             self.step()
+    #         else:
+    #             pass
+    #             #print('Move timed out')
+    #     except KeyboardInterrupt:
+    #         print 'Cancel move'
+    #         return
+    #     if self.debug:
+    #         self.cam.snap()
+
+    def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.5, angvel=2, force=1000):
+        pose[2] += 0.005
         max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
         timeout = max_dist/linvel
         try:
-            ang_tol = ang_tol*np.pi/180.
-            pose[2] += 0.02
-            # Linear joinst
-            for joint in range(3):
-                p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                        targetPosition=pose[joint], maxVelocity=linvel)
-            # Rotational joints
-            for joint in [3, 4, 5]:
-                p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                        targetPosition=pose[joint], maxVelocity=angvel)
-            for _ in range(int(timeout/self.timestep)):
-                state = p.getLinkState(self.gid, 5)
-                pos = np.array(state[0])
-                ori = np.array(p.getEulerFromQuaternion(state[1]))
-                ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
-                #print('Offset {} {}'.format(pose[0:3] - pos,
-                #    pose[3:6] - ori))
-                if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
-                    print('Arrived within tolerance')
-                    break
-                self.step()
-            else:
-                pass
-                #print('Move timed out')
-        except KeyboardInterrupt:
-            print 'Cancel move'
-            return
-        if self.debug:
-            self.cam.snap()
-
-    def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.3, angvel=1, force=1000):
-        max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
-        timeout = max_dist/linvel
-        try:
-            ang_tol = ang_tol*np.pi/180.
-            pose[2] += 0.005
-            # Linear joinst
+            ang_tol = np.radians(ang_tol)
+            # Linear joints
             for joint in range(3):
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                         targetPosition=pose[joint], targetVelocity=0,
@@ -643,11 +647,11 @@ class Simulator:
                 #print('Offset {} {}'.format(pose[0:3] - pos,
                 #    pose[3:6] - ori))
                 if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
-                    #print('Arrived within tolerance')
+                    # print('Arrived within tolerance')
                     break
                 self.step()
             else:
-                #print('Move timed out')
+                # print('Move timed out')
                 pass
         except KeyboardInterrupt:
             print 'Cancel move'

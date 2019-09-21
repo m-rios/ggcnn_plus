@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import argparse
 import glob
 import os
@@ -56,12 +58,14 @@ class JobEv(mpi.Job):
             pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, self.depth[gs.center])
             pose = np.concatenate((pose, [0, 0, gs.angle]))
 
-            if self.args.logvideo:
-                sim.start_log(self.sim_log_path + '/'+self.scene_name+'.mp4', VIDEO_LOGGER, rate=25)
-            else:
-                sim.start_log(self.sim_log_path + '/'+self.scene_name+'.log', STATE_LOGGER)
+            if not self.args.nolog:
+                if self.args.logvideo:
+                    sim.start_log(self.sim_log_path + '/'+self.scene_name+'.mp4', VIDEO_LOGGER, rate=25)
+                else:
+                    sim.start_log(self.sim_log_path + '/'+self.scene_name+'.log', STATE_LOGGER)
             self.result = sim.evaluate_grasp(pose, grasp_width)
-            sim.stop_log()
+            if not self.args.nolog:
+                sim.stop_log()
         else:
             self.result = False
         sim.disconnect()
@@ -153,6 +157,7 @@ if __name__ == '__main__':
         parser.add_argument('--scenes', default=os.environ['GGCNN_SCENES_PATH'], help='Path to scene files location')
         parser.add_argument('--models', default=os.environ['MODELS_PATH'], help='Path to obj files location')
         parser.add_argument('--logvideo', action='store_true')
+        parser.add_argument('--nolog', action='store_true')
         parser.add_argument('--gui', action='store_true')
         parser.add_argument('--subsample', default=None, type=float, help='Subsample depth image by provided factor before feeding to network')
         parser.add_argument('-e', nargs='+', default=None, type=int, help='epochs to evaluate, if next arg is model, separate with -- ')

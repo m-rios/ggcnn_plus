@@ -37,6 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('--scenes', default=os.environ['GGCNN_SCENES_PATH'], help='Path to scene files location')
     parser.add_argument('--models', default=os.environ['MODELS_PATH'], help='Path to obj files location')
     parser.add_argument('--logvideo', action='store_true')
+    parser.add_argument('--nolog', action='store_true')
     parser.add_argument('--subsample', default=None, type=float, help='Subsample depth image by provided factor before feeding to network')
     parser.add_argument('--gui', action='store_true')
     parser.add_argument('-e', nargs='+', default=None, type=int, help='epochs to evaluate, if next arg is model, separate with -- ')
@@ -113,12 +114,14 @@ if __name__ == '__main__':
                 pose, grasp_width = sim.cam.compute_grasp(gs.as_bb.points, depth[scene_idx][gs.center])
                 pose = np.concatenate((pose, [0, 0, gs.angle]))
 
-                if args.logvideo:
-                    sim.start_log(sim_log_path + '/'+scene_name+'.mp4', VIDEO_LOGGER, rate=25)
-                else:
-                    sim.start_log(sim_log_path + '/'+scene_name+'.log', STATE_LOGGER)
+                if not args.nolog:
+                    if args.logvideo:
+                        sim.start_log(sim_log_path + '/'+scene_name+'.mp4', VIDEO_LOGGER, rate=25)
+                    else:
+                        sim.start_log(sim_log_path + '/'+scene_name+'.log', STATE_LOGGER)
                 result = sim.evaluate_grasp(pose, grasp_width)
-                sim.stop_log()
+                if not args.nolog:
+                    sim.stop_log()
             else:
                 result = False
 

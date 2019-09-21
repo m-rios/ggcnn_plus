@@ -2,12 +2,14 @@ import bpy
 import glob
 import os
 
-BLENDER_SCENES_PATH='/home/mario/data/blender scenes'
+BLENDER_SCENES_PATH='/Users/mario/Developer/msc-thesis/data/3d_models/blender_scenes'
 blender_fns = glob.glob(os.path.join(BLENDER_SCENES_PATH, '*.blend'))
-scales_f = open('/home/mario/Developer/msc-thesis/simulator/scales.csv','w')
+scales_f = open(os.path.join(BLENDER_SCENES_PATH, 'scales.csv'),'w')
 scales_f.write('obj_id,scale\n')
 for blender_fn in blender_fns:
     obj_id = blender_fn.split('/')[-1].replace('.blend', '')
+    if obj_id == 'base_scene':
+        continue
 
     bpy.ops.wm.open_mainfile(filepath=blender_fn)
     bpy.ops.object.select_all( action = 'SELECT' )

@@ -1,8 +1,0 @@
-This file is a manual merge of files {beam_search_190703_1226} {beam_search_190717_1207}, since the run took too long to complete in 3 days and was split into two separate executions.
-
-Node: C9x9x32_C5x5x16_C3x3x8_T3x3x8_T5x5x16_T9x9x32 Score: 0.711267605634   Action:None
-Node: C9x9x32_C5x5x16_C5x5x16_C3x3x8_T3x3x8_T5x5x16_T9x9x32	Score: 0.75	Action:None
-Node: C9x9x32_C5x5x16_C5x5x16_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32	Score: 0.741549295775	Action:deeper_deconv_5
-Node: C9x9x32_C5x5x16_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32	Score: 0.761971830986	Action:deeper_conv_4
-Node: C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32	Score: 0.772535211268	Action:wider_conv_2
-Node: C9x9x64_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32	Score: 0.771126760563	Action:wider_conv_1

@@ -10,6 +10,14 @@
           <option name="port" value="22" />
         </fileTransfer>
       </webServer>
+      <webServer id="277d9de3-c130-4072-b30f-228b96391ec4" name="Ubuntu" url="http://ubuntu.local">
+        <fileTransfer host="ubuntu.local" port="22" rootFolder="/home/mario" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
     </option>
   </component>
 </project>
