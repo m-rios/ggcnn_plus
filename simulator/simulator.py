@@ -426,6 +426,10 @@ class Simulator:
         self.gid = p.loadURDF(gripper_fn)
         self.drawFrame([0,0,0])
         p.resetJointState(self.gid, 2, 1)
+        p.enableJointForceTorqueSensor(self.gid, 2)
+        p.enableJointForceTorqueSensor(self.gid, 5)
+        p.enableJointForceTorqueSensor(self.gid, 6)
+        p.enableJointForceTorqueSensor(self.gid, 7)
 
     def evaluate_6dof_grasp(self, pose, width):
         if not self.gid:
@@ -576,7 +580,7 @@ class Simulator:
         p.addUserDebugLine(f[2,:], t[2,:], blue, parentObjectUniqueId=parent)
 
     def close_gripper(self):
-        self.set_gripper_width(0)
+        return self.set_gripper_width(0)
 
     def open_gripper(self):
         self.set_gripper_width(0.3)
@@ -587,7 +591,14 @@ class Simulator:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                     targetPosition=width/2.,targetVelocity=0, maxVelocity=vel,
                     force=force)
-        self.run(epochs=int(0.6/self.timestep))
+
+        for _ in range(int(1./self.timestep)):
+            self.step()
+            states = p.getJointStates(self.gid, [6, 7])
+            velocities = [states[0][1] < 0.001, states[1][1] < 0.001]
+            if np.all(velocities):
+                break
+        # return self.run(epochs=int(0.6/self.timestep))
 
     # def move_gripper_to_old(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.3, angvel=1):
     #     max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
@@ -625,6 +636,45 @@ class Simulator:
 
     def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.5, angvel=2, force=1000):
         pose[2] += 0.005
+        max_dist = 2.  # Max distance that the gripper will have to traverse. This determines the timeout
+        timeout = max_dist / linvel
+        try:
+            ang_tol = np.radians(ang_tol)
+            # Linear joints
+            for joint in range(3):
+                p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                                        targetPosition=pose[joint], targetVelocity=0,
+                                        force=force, maxVelocity=linvel, positionGain=0.3, velocityGain=1)
+            # Rotational joints
+            for joint in [3, 4, 5]:
+                p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                                        targetPosition=pose[joint], targetVelocity=0, force=force,
+                                        maxVelocity=angvel, positionGain=0.3, velocityGain=1)
+            # self.run(epochs=100)
+            for _ in range(int(10./self.timestep)):
+                self.step()
+                states = np.array(p.getJointStates(self.gid, range(6)))
+                velocity = states[:, 1]
+                if np.all(velocity < self.stop_th) and np.all(velocity > -self.stop_th):
+                    break
+                # lin_vel = states[0][1]
+                # rot_vel = states[1][1]
+                # if (lin_vel < self.stop_th and lin_vel > -self.stop_th) and (rot_vel < self.stop_th and rot_vel > -self.stop_th):
+                #     break
+            # state = []
+            # for _ in range(3000):
+            #     self.step()
+            #     state += [p.getJointState(self.gid, 2)[1]]
+            # return state
+
+        except KeyboardInterrupt:
+            print 'Cancel move'
+            return
+        if self.debug:
+            self.cam.snap()
+
+    def move_gripper_to_old(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.5, angvel=2, force=1000):
+        pose[2] += 0.005
         max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
         timeout = max_dist/linvel
         try:
@@ -644,6 +694,7 @@ class Simulator:
                 pos = np.array(state[0])
                 ori = np.array(p.getEulerFromQuaternion(state[1]))
                 ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
+                print p.getJointState(self.gid, 2)[0], p.getJointState(self.gid, 2)[2][2]
                 #print('Offset {} {}'.format(pose[0:3] - pos,
                 #    pose[3:6] - ori))
                 if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
@@ -704,9 +755,13 @@ class Simulator:
         if epochs is None:
             epochs = self.epochs
         self.debug_viz()
+        # values = []
 
         for i in range(epochs):
             self.step()
+            # state0 = p.getJointState(self.gid, 6)[1]
+            # state1 = p.getJointState(self.gid, 7)[1]
+            # values += [[state0, state1]]
             if autostop and self.is_stable():
                 print('Stable')
                 break
@@ -714,6 +769,7 @@ class Simulator:
         else:
             if autostop:
                 print('Unstable')
+        # return values
 
     def debug_run(self):
         p.removeAllUserDebugItems()

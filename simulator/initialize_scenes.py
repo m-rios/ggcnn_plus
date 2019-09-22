@@ -51,7 +51,7 @@ if __name__ == '__main__':
             print('Processing: {} {} '.format(scene_n, obj_fn))
             idx = i*args.nscenes + scene_n
             if not args.default_scale:
-                scale = sim.read_scale(obj_fn.split('/')[-1].replace('.obj',''))
+                scale = sim.read_scale(obj_fn.split('/')[-1].replace('.obj',''), args.models)
             else:
                 scale = 1
             sim.load(obj_fn, ori=np.random.rand(3) * 2*np.pi, scale=scale)

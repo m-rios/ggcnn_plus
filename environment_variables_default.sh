@@ -6,5 +6,5 @@ export JACQUARD_PATH=$DATA/datasets/raw/jacquard_samples
 export PREPROCESSED_PATH=$DATA/datasets/preprocessed
 export SIM_LOG_PATH=$DATA/results/sim_logs
 export RESULTS_PATH=$DATA/results
-export MODELS_PATH=$DATA/3d_models/shapenet40
+export MODELS_PATH=$DATA/3d_models/shapenetsem40
 export VHACD_PATH=''

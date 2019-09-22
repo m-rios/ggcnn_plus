@@ -66,12 +66,12 @@ class Depth:
 
     def _apply_radius(self, pixel_radius):
         filled = np.argwhere(np.logical_not(np.isinf(self.img)))
-        new_img = np.ones(self.img.shape) * -np.inf
+        new_img = np.ones(self.img.shape) * np.inf
 
         for r, c in filled:
             rs = range(r - pixel_radius, r + pixel_radius + 1)
             cs = range(c - pixel_radius, c + pixel_radius + 1)
-            new_img[np.ix_(rs, cs)] = np.maximum(new_img[np.ix_(rs, cs)], np.full((2*pixel_radius + 1,)*2, self.img[r, c]))
+            new_img[np.ix_(rs, cs)] = np.minimum(new_img[np.ix_(rs, cs)], np.full((2*pixel_radius + 1,)*2, self.img[r, c]))
 
         self.img = new_img
 
@@ -80,18 +80,18 @@ class Depth:
         self.img = gaussian(self.img, sigma, preserve_range=True)
 
     def fill_missing(self):
-        missing_idx = np.isinf(self.img)
-        not_missing = self.img[np.logical_not(missing_idx)]
-        mean, sigma = not_missing.mean(), not_missing.std()
-        fill_value = mean - 2*sigma
-        self.img[missing_idx] = fill_value
-
-        # Old version
         # missing_idx = np.isinf(self.img)
-        # fill_value = np.min(self.img[np.logical_not(missing_idx)])
+        # not_missing = self.img[np.logical_not(missing_idx)]
+        # mean, sigma = not_missing.mean(), not_missing.std()
+        # fill_value = mean - 2*sigma
         # self.img[missing_idx] = fill_value
 
-    def to_object(self, uv):
+        # Old version
+        missing_idx = np.isinf(self.img)
+        fill_value = np.max(self.img[np.logical_not(missing_idx)])
+        self.img[missing_idx] = fill_value
+
+    def to_object(self, uv, approach_direction=1):
         uv = np.array(uv)
         u_ = uv[1]
         v_ = self.img.shape[0] - uv[0] - 1
@@ -134,17 +134,14 @@ class PointCloud:
     def top(self):
         return self.cloud.T[:2].T
 
-    @property
-    def front_depth(self, shape=300):
-        return self.to_depth(shape, 0)
+    def front_depth(self, approach_direction=1, shape=300):
+        return self.to_depth(shape, 0, approach_direction=approach_direction)
 
-    @property
-    def right_depth(self, shape=300):
-        return self.to_depth(shape, 1)
+    def right_depth(self, approach_direction=1, shape=300):
+        return self.to_depth(shape, 1, approach_direction=approach_direction)
 
-    @property
-    def top_depth(self, shape=300):
-        return self.to_depth(shape, 2)
+    def top_depth(self, approach_direction=1, shape=300):
+        return self.to_depth(shape, 2, approach_direction=approach_direction)
 
     def pixel_size(self, shape):
         """
@@ -166,19 +163,24 @@ class PointCloud:
         r = R.from_rotvec(axis*angle)
         return PointCloud(r.apply(self.cloud))
 
-    def to_depth(self, shape=300, index=0, padding=7, pixel_radius=3):
+    def to_depth(self, shape=300, index=0, padding=7, pixel_radius=3, approach_direction=1):
         """
-        Construct depth image from point cloud
+        Construct depth image from point cloud. Index axis points towards the direction the camera is aiming (i.e.
+        negative values occlude positive
         :param shape: output shape of the depth image (only one value, output is squared)
         :param index: column index in pc that defines depth
         :param missing: default value for missing-data
+        :param approach_direction: whether to approach from the positive or negative side of the index axis
         :return: ndarray of shape shape with depth information
         """
         assert pixel_radius <= padding
+        approach_direction = approach_direction or 1
+        approach_direction /= np.abs(approach_direction)  # Make sure it's normal
+        # self.cloud[:, index] *= approach_direction
         final_shape = shape
         shape -= padding*2
-        depth = np.ones((final_shape, final_shape)) * -np.inf
-        spatial_idx = list({0, 1, 2} - {index})
+        depth = np.ones((final_shape, final_shape)) * np.inf
+        spatial_idx = np.delete(range(3), index)
 
         # Calculate pixel size (same for all axes and all views)
         min_ = np.min(self.cloud[:, spatial_idx], axis=0)
@@ -190,7 +192,7 @@ class PointCloud:
 
         for p in self.cloud:
             r, c = ((p[spatial_idx] - min_)/pixel_size).astype(np.int) + padding + t
-            depth[r, c] = max(p[index], depth[r, c])
+            depth[r, c] = min(p[index], depth[r, c])
 
         # Swap rows for columns (e.g. rows vertical but x horizontal)
         depth = depth.T
@@ -205,6 +207,7 @@ class PointCloud:
         def inverse_transform(pixel):
             return (pixel - padding - t)*pixel_size + min_
 
+        # self.cloud[:, index] *= approach_direction
         return Depth(depth, inverse_transform, pixel_radius, index)
 
     def orthographic_projection(self):
@@ -373,14 +376,19 @@ class OrthoNet:
         render_pose(object_cloud, camera_center, camera_target - camera_center, np.array([[0., 1., 0.]]), 0.1)
 
         # Prediction
-        depths = [object_cloud.front_depth, object_cloud.right_depth, object_cloud.top_depth]
+        d1 = np.sign(np.dot(camera_target[0], [-1, 0, 0]))
+        d2 = np.sign(np.dot(camera_target[0], [0, -1, 0]))
+        d3 = np.sign(np.dot(camera_target[0], [0, 0, -1]))
+        depths = [object_cloud.front_depth(approach_direction=d1),
+                  object_cloud.right_depth(approach_direction=d2),
+                  object_cloud.top_depth(approach_direction=d3)]
         positions = []
         zs = []
         ys = []
         widths = []
         for index, depth in enumerate(depths):
             position, z, y, width = predictor(depth, index)
-            # render_pose(object_cloud, position, z, y, width)
+            render_pose(object_cloud, position, z, y, width)
 
             # Backwards transform
             roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
@@ -396,6 +404,8 @@ class OrthoNet:
             camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
             camera_y = camera_y / np.linalg.norm(camera_y)
 
+            # render_pose(camera_cloud, camera_position, camera_orientation, camera_y, width)
+
             positions.append(camera_position)
             zs.append(camera_orientation/np.linalg.norm(camera_orientation))
             ys.append(camera_y/np.linalg.norm(camera_y))
@@ -405,7 +415,7 @@ class OrthoNet:
 
     def network_predictor(self, depth_img, index, debug=True):
         from core.network import get_grasps_from_output
-        positions, angles, widths = self.network.predict(-depth_img.img)
+        positions, angles, widths = self.network.predict(depth_img.img)
         gs = get_grasps_from_output(positions, angles, widths)
         if debug:
             from core.network import get_output_plot
@@ -427,7 +437,7 @@ class OrthoNet:
         y = y / np.linalg.norm(y)
         y = np.insert(y, index, 0)
 
-        z = np.insert(np.zeros(2), index, -1).reshape((1, 3))
+        z = np.insert(np.zeros(2), index, 1).reshape((1, 3))
         return point.reshape((1, 3)), z, y, width
 
     @staticmethod
