@@ -14,7 +14,7 @@ linewidth = 1.2
 
 reported_ggcnn_adv = 0.84  # The results they published in real world open loop experiment
 reported_ggcnn_house = 0.92  # The results they published in real world open loop experiment
-vanilla_ggcnn = 0.774358974359
+vanilla_ggcnn = 0.785  # The results of their published network on our simulator
 
 
 def _read_simulation(sim_results_fn):
@@ -99,25 +99,26 @@ def simulator_baseline():
     sim_epochs, sim_values = _read_simulation(sim_results_fn)
     iou_epochs, iou_values = _read_iou(iou_results_fn)
 
-    fig, ax1 = plt.subplots()
-    plt.title('Simulation Baseline')
-    ax1.plot(range(1, 51), np.tile(reported_ggcnn_adv, 50), color='k', dashes=dash, linewidth=linewidth)
-    ax1.plot(range(1, 51), np.tile(reported_ggcnn_house, 50), color='k', dashes=dot_dash, linewidth=linewidth)
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 5))
+    # plt.title('Simulation Baseline')
+    ax1.set_title('Simulation')
     ax1.plot(range(1, 51), np.tile(vanilla_ggcnn, 50), color='k', linewidth=linewidth)
     ax1.plot(sim_epochs, sim_values, color='k', marker='.')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('% successful grasps')
+    ax1.legend(['GGCNN_sim', 'simulation'])
+    ax1.grid(True)
 
-    ax2 = ax1.twinx()
-    ax2.plot(iou_epochs, iou_values, color=red, marker='.', linewidth=linewidth)
-    ax2.set_ylabel('% IOU > 0.25', color=red)
-    ax2.tick_params(axis='y', labelcolor=red)
-    fig.legend(['GGCNN_adv', 'GGCNN_hou', 'GGCNN_sim', 'simulation', 'iou'],
-               loc='lower right',
-               bbox_to_anchor=(0.9, 0.1))
+    # ax2 = ax1.twinx()
+    ax2.set_title('IOU')
+    ax2.plot(iou_epochs, iou_values, color='k', marker='.', linewidth=linewidth)
+    ax2.set_ylabel('% IOU > 0.25', color='k')
+    ax2.set_xlabel('Epoch')
+    ax2.grid(True)
 
     if not DEBUG:
         plt.savefig(OUTPUT_PATH + 'simulation_baseline.eps')
+
 
 def jacquard_baseline():
     plt.figure()
@@ -239,8 +240,8 @@ def beam_search_optimize():
 
 
 if __name__ == '__main__':
-    # simulator_baseline()
+    simulator_baseline()
     # jacquard_baseline()
-    beam_search_improve()
+    # beam_search_improve()
     # beam_search_optimize()
     plt.show()
