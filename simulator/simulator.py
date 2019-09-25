@@ -591,37 +591,38 @@ class Simulator:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                     targetPosition=width/2.,targetVelocity=0, maxVelocity=vel,
                     force=force)
-
-        for _ in range(int(1./self.timestep)):
-            self.step()
-            states = p.getJointStates(self.gid, [6, 7])
-            velocities = [states[0][1] < 0.001, states[1][1] < 0.001]
-            if np.all(velocities):
-                break
+        self.run(epochs=int(0.6/self.timestep))
 
     def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.5, angvel=2, force=1000):
         pose[2] += 0.005
-        max_dist = 2.  # Max distance that the gripper will have to traverse. This determines the timeout
-        timeout = max_dist / linvel
+        max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
+        timeout = max_dist/linvel
         try:
             ang_tol = np.radians(ang_tol)
             # Linear joints
             for joint in range(3):
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                                        targetPosition=pose[joint], targetVelocity=0,
-                                        force=force, maxVelocity=linvel, positionGain=0.3, velocityGain=1)
+                        targetPosition=pose[joint], targetVelocity=0,
+                        force=force, maxVelocity=linvel, positionGain=0.3, velocityGain=1)
             # Rotational joints
             for joint in [3, 4, 5]:
                 p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
-                                        targetPosition=pose[joint], targetVelocity=0, force=force,
-                                        maxVelocity=angvel, positionGain=0.3, velocityGain=1)
-            for _ in range(int(10./self.timestep)):
-                self.step()
-                states = np.array(p.getJointStates(self.gid, range(6)))
-                velocity = states[:, 1]
-                if np.all(velocity < self.stop_th) and np.all(velocity > -self.stop_th):
+                        targetPosition=pose[joint], targetVelocity=0, force=force,
+                        maxVelocity=angvel, positionGain=0.3, velocityGain=1)
+            for _ in range(int(timeout/self.timestep)):
+                state = p.getLinkState(self.gid, 5)
+                pos = np.array(state[0])
+                ori = np.array(p.getEulerFromQuaternion(state[1]))
+                ori = np.array([x[0] for x in p.getJointStates(self.gid, [3,4,5])])
+                #print('Offset {} {}'.format(pose[0:3] - pos,
+                #    pose[3:6] - ori))
+                if np.linalg.norm(pos - pose[0:3]) < pos_tol and (np.abs(ori - pose[3:6]) < ang_tol).all():
+                    # print('Arrived within tolerance')
                     break
-
+                self.step()
+            else:
+                # print('Move timed out')
+                pass
         except KeyboardInterrupt:
             print 'Cancel move'
             return
