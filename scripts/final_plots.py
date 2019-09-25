@@ -63,33 +63,11 @@ def _read_beam(beam_results_fn):
     return epochs, iou_values
 
 
-def simulator_baseline_old():
-    results_path = '/Users/mario/Developer/msc-thesis/data/results/190503_1946__ggcnn_9_5_3__32_16_8/'
-    simulation_results_fn = results_path + 'results.txt'
-    iou_results_fn = results_path + 'iou/iou_cornell_25.txt'
-
-    sim_epochs, sim_values = _read_simulation(simulation_results_fn)
-    iou_epochs, iou_values = _read_iou(iou_results_fn)
-
-    fig, ax1 = plt.subplots()
-    plt.title('Simulation Baseline')
-    ax1.plot(range(1, 51), np.tile(reported_ggcnn_adv, 50), color='k', dashes=dash, linewidth=linewidth)
-    ax1.plot(range(1, 51), np.tile(reported_ggcnn_house, 50), color='k', dashes=dot_dash, linewidth=linewidth)
-    ax1.plot(range(1, 51), np.tile(vanilla_ggcnn, 50), color='k', linewidth=linewidth)
-    ax1.plot(sim_epochs, sim_values, color='k', marker='.')
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('% successful grasps')
-
-    ax2 = ax1.twinx()
-    ax2.plot(iou_epochs, iou_values, color=red, marker='.', linewidth=linewidth)
-    ax2.set_ylabel('% IOU > 0.25', color=red)
-    ax2.tick_params(axis='y', labelcolor=red)
-    fig.legend(['GGCNN_adv', 'GGCNN_hou', 'GGCNN_sim', 'simulation', 'iou'],
-               loc='lower right',
-               bbox_to_anchor=(0.9, 0.1))
-
+def _save_plot(filename):
     if not DEBUG:
-        plt.savefig(OUTPUT_PATH+'simulation_baseline.eps')
+        plot_fn = OUTPUT_PATH+filename+'.eps'
+        plt.savefig(plot_fn)
+        print 'saved plot as {}'.format(plot_fn)
 
 
 def simulator_baseline():
@@ -116,8 +94,7 @@ def simulator_baseline():
     ax2.set_xlabel('Epoch')
     ax2.grid(True)
 
-    if not DEBUG:
-        plt.savefig(OUTPUT_PATH + 'simulation_baseline.eps')
+    _save_plot('simulation_baseline')
 
 
 def jacquard_baseline():
@@ -136,8 +113,7 @@ def jacquard_baseline():
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
 
-    if not DEBUG:
-        plt.savefig(OUTPUT_PATH+'jacquard_baseline.eps')
+    _save_plot('jacquard_baseline')
 
 
 def beam_search_improve():
@@ -187,8 +163,7 @@ def beam_search_improve():
     plt.xlabel('Depth')
     plt.legend(['e=2', 'e=5', 'e=10', 'e=2 r = 8', 'e=2 transpose'], markerscale=0)
 
-    if not DEBUG:
-        plt.savefig(OUTPUT_PATH+'beam_search_improve.eps')
+    _save_plot('beam_search_improve')
 
 
 def beam_search_optimize():
@@ -235,8 +210,7 @@ def beam_search_optimize():
     plt.xlabel('Depth')
     plt.ylabel('Accuracy')
     plt.title('Optimizing')
-    if not DEBUG:
-        plt.savefig(OUTPUT_PATH+'beam_search_optimize.eps')
+    _save_plot('beam_search_optimize')
 
 
 if __name__ == '__main__':
