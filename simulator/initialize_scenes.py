@@ -37,9 +37,9 @@ if __name__ == '__main__':
     scenes_ds.create_dataset('depth', (len(obj_fns)*args.nscenes,args.height, args.width), dtype=np.float64)
     scenes_ds.create_dataset('scene', (len(obj_fns)*args.nscenes,), dtype=tp)
 
-    timestep = 1./240.
-    sim = Simulator(gui=args.gui, use_egl=False, epochs=int(5/timestep), timestep=timestep,
-            stop_th=1e-6, debug=args.gui)
+    timestep = 0.001
+    sim = Simulator(gui=args.gui, use_egl=False, epochs=int(10/timestep), timestep=timestep,
+            stop_th=1e-7, debug=args.gui)
     sim.cam.width = args.width
     sim.cam.height = args.height
 
@@ -47,7 +47,9 @@ if __name__ == '__main__':
         scenes_ds.attrs[var[0]] = var[1]
 
     for i, obj_fn in enumerate(obj_fns):
-        for scene_n in range(args.nscenes):
+        scene_it = iter(range(args.nscenes))
+        scene_n = next(scene_it, None)
+        while scene_n is not None:
             print('Processing: {} {} '.format(scene_n, obj_fn))
             idx = i*args.nscenes + scene_n
             if not args.default_scale:
@@ -57,16 +59,17 @@ if __name__ == '__main__':
             sim.load(obj_fn, ori=np.random.rand(3) * 2*np.pi, scale=scale)
             sim.run(autostop=True)
 
-    #        if sim.is_stable():
+            if sim.is_stable():
+                obj_name = obj_fn.split('/')[-1].split('.')[-2]
+                scenes_ds['name'][idx] = str(scene_n) + '_' + obj_name
+                scenes_ds['scene'][idx] = sim.get_state()
 
-            obj_name = obj_fn.split('/')[-1].split('.')[-2]
-            scenes_ds['name'][idx] = str(scene_n) + '_' + obj_name
-            scenes_ds['scene'][idx] = sim.get_state()
+                sim.cam.target = sim.get_clutter_center().tolist()
+                rgb, depth = sim.cam.snap()
+                scenes_ds['rgb'][idx] = rgb[:,:,:3]
+                scenes_ds['depth'][idx] = depth
 
-            sim.cam.target = sim.get_clutter_center().tolist()
-            rgb, depth = sim.cam.snap()
-            scenes_ds['rgb'][idx] = rgb[:,:,:3]
-            scenes_ds['depth'][idx] = depth
+                scene_n = next(scene_it, None)
 
             #obj_name = obj_fn.split('/')[-1].split('.')[-2]
             #world_fn = str(scene_n) + '_' + obj_name + '_scene.csv'

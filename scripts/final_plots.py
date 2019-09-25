@@ -63,7 +63,7 @@ def _read_beam(beam_results_fn):
     return epochs, iou_values
 
 
-def simulator_baseline():
+def simulator_baseline_old():
     results_path = '/Users/mario/Developer/msc-thesis/data/results/190503_1946__ggcnn_9_5_3__32_16_8/'
     simulation_results_fn = results_path + 'results.txt'
     iou_results_fn = results_path + 'iou/iou_cornell_25.txt'
@@ -91,6 +91,33 @@ def simulator_baseline():
     if not DEBUG:
         plt.savefig(OUTPUT_PATH+'simulation_baseline.eps')
 
+
+def simulator_baseline():
+    iou_results_fn = '/Users/mario/Developer/msc-thesis/data/results/190503_1946__ggcnn_9_5_3__32_16_8/iou/iou_cornell_25.txt'
+    sim_results_fn = '/Users/mario/Developer/msc-thesis/data/results/190922_1527_ggcnn_cornell/results.txt'
+
+    sim_epochs, sim_values = _read_simulation(sim_results_fn)
+    iou_epochs, iou_values = _read_iou(iou_results_fn)
+
+    fig, ax1 = plt.subplots()
+    plt.title('Simulation Baseline')
+    ax1.plot(range(1, 51), np.tile(reported_ggcnn_adv, 50), color='k', dashes=dash, linewidth=linewidth)
+    ax1.plot(range(1, 51), np.tile(reported_ggcnn_house, 50), color='k', dashes=dot_dash, linewidth=linewidth)
+    ax1.plot(range(1, 51), np.tile(vanilla_ggcnn, 50), color='k', linewidth=linewidth)
+    ax1.plot(sim_epochs, sim_values, color='k', marker='.')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('% successful grasps')
+
+    ax2 = ax1.twinx()
+    ax2.plot(iou_epochs, iou_values, color=red, marker='.', linewidth=linewidth)
+    ax2.set_ylabel('% IOU > 0.25', color=red)
+    ax2.tick_params(axis='y', labelcolor=red)
+    fig.legend(['GGCNN_adv', 'GGCNN_hou', 'GGCNN_sim', 'simulation', 'iou'],
+               loc='lower right',
+               bbox_to_anchor=(0.9, 0.1))
+
+    if not DEBUG:
+        plt.savefig(OUTPUT_PATH + 'simulation_baseline.eps')
 
 def jacquard_baseline():
     plt.figure()
@@ -123,11 +150,11 @@ def beam_search_improve():
     ]
 
     sim_paths = [
-        '/Users/mario/Developer/msc-thesis/data/results/190917_1926_beam_search_2/',
-        '/Users/mario/Developer/msc-thesis/data/results/190917_1926_beam_search_5/',
-        '/Users/mario/Developer/msc-thesis/data/results/190917_1926_beam_search_10/',
-        '/Users/mario/Developer/msc-thesis/data/results/190917_1928_beam_search_2+8/',
-        '/Users/mario/Developer/msc-thesis/data/results/190917_1929_beam_search_last/'
+        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_2/',
+        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_5/',
+        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_10/',
+        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_2+8/',
+        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_last/'
     ]
 
     # colors = [red, 'g', 'b', 'k']
@@ -212,8 +239,8 @@ def beam_search_optimize():
 
 
 if __name__ == '__main__':
-    simulator_baseline()
-    jacquard_baseline()
+    # simulator_baseline()
+    # jacquard_baseline()
     beam_search_improve()
-    beam_search_optimize()
+    # beam_search_optimize()
     plt.show()
