@@ -1,7 +1,7 @@
 import pylab as plt
 import numpy as np
 
-DEBUG = False
+DEBUG = True
 OUTPUT_PATH = '/Users/mario/Dropbox/Apps/Texpad/Master thesis/Thesis/figures/'
 
 gray = '#888888'
@@ -72,7 +72,8 @@ def _save_plot(filename):
 
 def simulator_baseline():
     iou_results_fn = '/Users/mario/Developer/msc-thesis/data/results/190503_1946__ggcnn_9_5_3__32_16_8/iou/iou_cornell_25.txt'
-    sim_results_fn = '/Users/mario/Developer/msc-thesis/data/results/190922_1527_ggcnn_cornell/results.txt'
+    # sim_results_fn = '/Users/mario/Developer/msc-thesis/data/results/190922_1527_ggcnn_cornell/results.txt'
+    sim_results_fn = '/Users/mario/Developer/msc-thesis/data/results/190925_2003_ggcnn_cornell/results.txt'
 
     sim_epochs, sim_values = _read_simulation(sim_results_fn)
     iou_epochs, iou_values = _read_iou(iou_results_fn)

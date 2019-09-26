@@ -15,6 +15,7 @@
             <excludedPath path="msc-thesis/.gpu" />
             <excludedPath local="true" path="$PROJECT_DIR$/test/depth_inpainted.npy" />
             <excludedPath local="true" path="$PROJECT_DIR$/simulator/data" />
+            <excludedPath local="true" path="$PROJECT_DIR$/dissertation" />
           </excludedPaths>
         </serverdata>
       </paths>
