@@ -3,6 +3,7 @@ literature
 download_jacquard.sh # Ignored to avoid exposing url to the public
 data/results
 data/scenes
+.out  # Peregrine log files
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

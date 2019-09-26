@@ -10,4 +10,4 @@
 source ~/msc-thesis/jobs/.ml_cpu.sh
 source ~/msc-thesis/.cpu/bin/activate
 cd ~/msc-thesis
-python core/evaluate.py /home/s3485781/DATA/networks/ggcnn_rss --scenes ~/DATA/scenes/shapenetsem40_5.hdf5 --nolog
+python core/evaluate.py /home/s3485781/DATA/networks/ggcnn_rss --scenes ~/DATA/scenes/shapenetsem40_5.hdf5 --nolog --models ~/DATA/shapenetsem40
