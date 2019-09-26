@@ -128,11 +128,16 @@ def beam_search_improve():
     ]
 
     sim_paths = [
-        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_2/',
-        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_5/',
-        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_10/',
-        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_2+8/',
-        '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_last/'
+        # '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_2/',
+        # '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_5/',
+        # '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_10/',
+        # '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_2+8/',
+        # '/Users/mario/Developer/msc-thesis/data/results/190922_1959_beam_search_last/'
+        '/Users/mario/Developer/msc-thesis/data/results/190926_1229_beam_search_2/',
+        '/Users/mario/Developer/msc-thesis/data/results/190926_1229_beam_search_5/',
+        '/Users/mario/Developer/msc-thesis/data/results/190926_1229_beam_search_10/',
+        '/Users/mario/Developer/msc-thesis/data/results/190926_1229_beam_search_2+8/',
+        '/Users/mario/Developer/msc-thesis/data/results/190926_1229_beam_search_last/'
     ]
 
     # colors = [red, 'g', 'b', 'k']
@@ -175,8 +180,10 @@ def beam_search_optimize():
     ]
 
     sim_paths = [
-        '/Users/mario/Developer/msc-thesis/data/results/190917_1928_beam_search_narrow/',
-        '/Users/mario/Developer/msc-thesis/data/results/190917_1928_beam_search_190625_2054/',
+        # '/Users/mario/Developer/msc-thesis/data/results/190917_1928_beam_search_narrow/',
+        # '/Users/mario/Developer/msc-thesis/data/results/190917_1928_beam_search_190625_2054/',
+        '/Users/mario/Developer/msc-thesis/data/results/190926_1229_beam_search_narrow/',
+        '/Users/mario/Developer/msc-thesis/data/results/190926_1229_beam_search_190625_2054/',
     ]
 
     starting_values = [0.425352112676, 'NaN']
@@ -215,8 +222,8 @@ def beam_search_optimize():
 
 
 if __name__ == '__main__':
-    simulator_baseline()
+    # simulator_baseline()
     # jacquard_baseline()
-    # beam_search_improve()
-    # beam_search_optimize()
+    beam_search_improve()
+    beam_search_optimize()
     plt.show()

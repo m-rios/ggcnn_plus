@@ -2,6 +2,7 @@ from unittest import TestCase
 import keras
 from core.network_optimization import NetworkOptimization
 from core.network import Network
+import numpy as np
 
 
 class TestNetworkOptimization(TestCase):
@@ -45,3 +46,9 @@ class TestNetworkOptimization(TestCase):
         print 'Nodes: {}'.format(nodes)
         print 'Scores: {}'.format(scores)
         print 'Actions: {}'.format(actions)
+
+    def test_evaluate_loss(self):
+        node = Network(model_fn='../data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        op = NetworkOptimization(eval_method='loss', dataset_fn='../data/datasets/preprocessed/jacquard_samples.hdf5',
+                                 epochs=1, debug=True)
+        op.evaluate(node)

@@ -22,8 +22,8 @@ if __name__ == '__main__':
     os.makedirs(results_path)
 
     network = net.Network(model_fn=args.model)
-    optimizer = opt.NetworkOptimization('iou', args.dataset, debug=True, epochs=args.epochs, results_path=results_path, retrain_epochs=args.retrain_epochs, expand_transpose=args.expand_transpose)
-    [nodes, scores, actions] = optimizer.run(network, k=args.width, depth=args.depth)
+    optimizer = opt.NetworkOptimization('loss', args.dataset, debug=True, epochs=args.epochs, results_path=results_path, retrain_epochs=args.retrain_epochs, expand_transpose=args.expand_transpose)
+    [nodes, scores, actions] = optimizer.run(network, k=args.width, depth=args.depth, minimize=True)
 
     results_fn = open(os.path.join(results_path, 'results.txt'), 'a')
     for node_idx, node in enumerate(nodes):

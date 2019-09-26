@@ -35,7 +35,7 @@ class BeamSearch:
         """
         raise NotImplemented
 
-    def lookahead(self, root, k, depth):
+    def lookahead(self, root, k, depth, minimize=False):
         """
         Explores nodes ahead of root to determine which immediate root's child is best to expand next
         :param root: node from which lookahead is performed
@@ -73,7 +73,10 @@ class BeamSearch:
                 parent_idx += 1
 
             beam_width = min(len(children), k)
-            sort_idx = np.argsort(children_scores)[::-1]  # Sort indices descending
+            if minimize:
+                sort_idx = np.argsort(children_scores)
+            else:
+                sort_idx = np.argsort(children_scores)[::-1]  # Sort indices descending
             selected_idx = sort_idx[:beam_width]  # Trim selection by beam_width
 
             self.log.debug('queue = {}'.format(queue))
@@ -101,7 +104,7 @@ class BeamSearch:
         """
         return node
 
-    def run(self, node, k=3, depth=2):
+    def run(self, node, k=3, depth=2, minimize=False):
         """
         Performs Breadth-First-Search with lookahead but limiting the expanding nodes by a beam width (k)
         :param node: Starting node of the search
@@ -119,7 +122,7 @@ class BeamSearch:
 
         for d in range(1, depth+1)[::-1]:  # Decrement d on each step so that max explored level is depth
             self.log.info('Starting lookahead at depth {}'.format(depth-d))
-            nodes, parents_idx, scores, actions, beam_width = self.lookahead(root, k, d)
+            nodes, parents_idx, scores, actions, beam_width = self.lookahead(root, k, d, minimize)
             self.log.info('Best child at depth {} found'.format(depth-d))
 
             self.log.debug('nodes = {}'.format(nodes))

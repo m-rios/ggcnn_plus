@@ -1,3 +1,4 @@
+import numpy as np
 import h5py
 import core.network as net
 import os
@@ -19,7 +20,7 @@ class NetworkOptimization(BeamSearch):
         :param epochs: number of epochs to retrain the expanded models for
         :param results_path: path where the results folder will written
         """
-        assert eval_method == 'iou' or eval_method == 'sim'
+        assert eval_method == 'iou' or eval_method == 'sim' or eval_method == 'loss'
 
         self.eval_method = eval_method
         self.min_iou = min_iou
@@ -41,6 +42,15 @@ class NetworkOptimization(BeamSearch):
             self.scenes = self._dataset['test']['img_id'][:]
             self.depth = self._dataset['test']['depth_inpainted'][:]
             self.bbs = self._dataset['test']['bounding_boxes'][:]
+        elif self.eval_method == 'loss':
+            self.x_test = np.expand_dims(np.array(self._dataset['test/depth_inpainted']), -1)
+            point_test = np.expand_dims(np.array(self._dataset['test/grasp_points_img']), -1)
+            angle_test = np.array(self._dataset['test/angle_img'])
+            cos_test = np.expand_dims(np.cos(2 * angle_test), -1)
+            sin_test = np.expand_dims(np.sin(2 * angle_test), -1)
+            grasp_width_test = np.expand_dims(np.array(self._dataset['test/grasp_width']), -1)
+            grasp_width_test = np.clip(grasp_width_test, 0, 150) / 150.0
+            self.y_test = [point_test, cos_test, sin_test, grasp_width_test]
         else:
             raise NotImplemented('sim evaluation is still not supported')
 
@@ -79,6 +89,10 @@ class NetworkOptimization(BeamSearch):
                                                       min_iou=self.min_iou)
         return float(len(succeeded))/(len(succeeded) + len(failed))
 
+    def _evaluate_loss(self, node):
+        # node.compile(optimizer='rmsprop', loss='mean_squared_error')
+        return np.mean(node.model.evaluate(self.x_test, self.y_test, verbose=0))
+
     def _evaluate_sim(self, node):
         raise NotImplemented('sim evaluation is still not supported')
 
@@ -89,6 +103,8 @@ class NetworkOptimization(BeamSearch):
             result = self._evaluate_iou(node)
         elif self.eval_method == 'sim':
             result = self._evaluate_sim(node)
+        elif self.eval_method == 'loss':
+            result = self._evaluate_loss(node)
         else:  # Failed sanity check
             raise ValueError('Unrecognised value of eval_method. Expected either sim or iou. Received {}'.format(
                 self.eval_method))
