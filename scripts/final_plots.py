@@ -3,6 +3,7 @@ import numpy as np
 
 DEBUG = True
 OUTPUT_PATH = '/Users/mario/Dropbox/Apps/Texpad/Master thesis/Thesis/figures/'
+RESULTS_PATH = '/Users/mario/Developer/msc-thesis/data/results/'
 
 gray = '#888888'
 red = '#f20000'
@@ -221,9 +222,25 @@ def beam_search_optimize():
     _save_plot('beam_search_optimize')
 
 
+def beam_loss():
+    epochs, loss_values = _read_beam(RESULTS_PATH + 'beam_search_190926_2111/results.txt')
+    epochs_sim, sim_values = _read_simulation(RESULTS_PATH + '190928_1305_beam_search_190926_2111/results.txt')
+    plt.subplot(121)
+    plt.plot(epochs, loss_values)
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.subplot(122)
+    plt.plot(epochs_sim, sim_values)
+    plt.title('SIM')
+    plt.ylabel('% successful grasps')
+    plt.xlabel('Epochs')
+    plt.suptitle('Loss as heuristic')
+
+
 if __name__ == '__main__':
     # simulator_baseline()
     # jacquard_baseline()
-    beam_search_improve()
-    beam_search_optimize()
+    # beam_search_improve()
+    # beam_search_optimize()
+    beam_loss()
     plt.show()

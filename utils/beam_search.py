@@ -129,7 +129,10 @@ class BeamSearch:
             self.log.debug('parents_idx = {}'.format(parents_idx))
 
             beam_scores = scores[-beam_width:]
-            best_leaf_idx = (len(scores) - beam_width + np.argsort(beam_scores)[-1])
+            if minimize:
+                best_leaf_idx = (len(scores) - beam_width + np.argsort(beam_scores)[0])
+            else:
+                best_leaf_idx = (len(scores) - beam_width + np.argsort(beam_scores)[-1])
 
             self.log.debug('best_leaf_idx = {}'.format(best_leaf_idx))
 
@@ -147,5 +150,39 @@ class BeamSearch:
             actions_trace.append(actions[best_parent_idx])
 
         return nodes_trace, scores_trace, actions_trace
+
+    def run_no_lookahead(self, node, k=3, depth=2, minimize=False):
+        root = node
+        nodes_trace = [node]
+        scores_trace = [self.evaluate(node)]
+        actions_trace = [None]
+
+        nodes, parents_idx, scores, actions, beam_width = self.lookahead(root, k, depth, minimize)
+
+        beam_scores = scores[-beam_width:]
+
+        if minimize:
+            best_leaf_idx = (len(scores) - beam_width + np.argsort(beam_scores)[0])
+        else:
+            best_leaf_idx = (len(scores) - beam_width + np.argsort(beam_scores)[-1])
+
+        self.log.debug('best_leaf_idx = {}'.format(best_leaf_idx))
+
+        best_parent_idx = parents_idx[best_leaf_idx]
+        sub_trace_idx = [best_parent_idx]
+        while parents_idx[best_parent_idx] != 0:
+            best_parent_idx = parents_idx[best_parent_idx]
+            sub_trace_idx.append(best_parent_idx)
+
+        sub_trace_idx = sub_trace_idx[::-1]
+        nodes_trace += [nodes[trace_idx] for trace_idx in sub_trace_idx] + [nodes[best_leaf_idx]]
+        scores_trace += [scores[trace_idx] for trace_idx in sub_trace_idx] + [scores[best_leaf_idx]]
+        actions_trace += [actions[trace_idx] for trace_idx in sub_trace_idx] + [actions[best_leaf_idx]]
+
+        for node in nodes_trace:
+            self.post_lookahead(node)
+
+        return nodes_trace, scores_trace, actions_trace
+
 
 
