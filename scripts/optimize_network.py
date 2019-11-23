@@ -14,6 +14,8 @@ if __name__ == '__main__':
     parser.add_argument('--depth',default=5, type=int, help='Depth of the beam search')
     parser.add_argument('--results',default=os.environ['RESULTS_PATH'], help='Path where results directory will be created')
     parser.add_argument('--expand_transpose',action='store_true', help='If set it also explores Conv2DTranspose layers')
+    parser.add_argument('--no_lookahead', action='store_true', help='If it will go down the tree only once')
+    parser.add_argument('--heuristic', choices=['loss', 'iou'],help='The heuristic used to select the best node')
 
     args = parser.parse_args()
 
@@ -22,8 +24,11 @@ if __name__ == '__main__':
     os.makedirs(results_path)
 
     network = net.Network(model_fn=args.model)
-    optimizer = opt.NetworkOptimization('loss', args.dataset, debug=True, epochs=args.epochs, results_path=results_path, retrain_epochs=args.retrain_epochs, expand_transpose=args.expand_transpose)
-    [nodes, scores, actions] = optimizer.run(network, k=args.width, depth=args.depth, minimize=True)
+    optimizer = opt.NetworkOptimization(args.heuristic, args.dataset, debug=True, epochs=args.epochs, results_path=results_path, retrain_epochs=args.retrain_epochs, expand_transpose=args.expand_transpose)
+    if args.no_lookahead:
+        [nodes, scores, actions] = optimizer.run_no_lookahead(network, k=args.width, depth=args.depth, minimize=args.heuristic=='loss')
+    else:
+        [nodes, scores, actions] = optimizer.run(network, k=args.width, depth=args.depth, minimize=args.heuristic=='loss')
 
     results_fn = open(os.path.join(results_path, 'results.txt'), 'a')
     for node_idx, node in enumerate(nodes):

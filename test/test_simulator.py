@@ -90,3 +90,12 @@ class TestSimulatorCamera(TestCase):
         # import pylab as plt
         # plt.plot(result, '-r')
         # plt.show()
+
+    def test_static_gripper(self):
+        import h5py
+        scene = h5py.File('../data/scenes/shapenetsem40_5.hdf5')['scene'][31]
+        sim = Simulator(gui=True, use_egl=False)
+        sim.restore(scene, '../data/3d_models/shapenetsem40')
+        sim.add_gripper('../simulator/gripper.urdf')
+        sim.load('../simulator/bin.urdf', pos=sim.bin_pos)
+        sim.run(epochs=50000)

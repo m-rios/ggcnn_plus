@@ -187,7 +187,7 @@ def beam_search_optimize():
         '/Users/mario/Developer/msc-thesis/data/results/190926_1229_beam_search_190625_2054/',
     ]
 
-    starting_values = [0.425352112676, 'NaN']
+    starting_values = [0.64, 0.65]
     colors = [red, 'k']
     marker = '.'
 
@@ -223,24 +223,60 @@ def beam_search_optimize():
 
 
 def beam_loss():
-    epochs, loss_values = _read_beam(RESULTS_PATH + 'beam_search_190926_2111/results.txt')
-    epochs_sim, sim_values = _read_simulation(RESULTS_PATH + '190928_1305_beam_search_190926_2111/results.txt')
+
+    loss_paths = [
+        RESULTS_PATH + 'beam_search_190926_1950/',
+        RESULTS_PATH + 'beam_search_190926_2111/',
+        RESULTS_PATH + 'beam_search_190928_1316/',
+    ]
+
+    sim_paths = [
+        RESULTS_PATH + '190929_0958_beam_search_190926_1950/',
+        RESULTS_PATH + '190929_1125_beam_search_190926_2111/',
+        RESULTS_PATH + '190929_1051_beam_search_190928_1316/',
+    ]
+
+    colors = [red, 'k', 'b']
+    marker = '.'
     plt.subplot(121)
-    plt.plot(epochs, loss_values)
-    plt.xlabel('Epochs')
+    for idx, loss_path in enumerate(loss_paths):
+        loss_results_fn = loss_path + 'results.txt'
+
+        epochs, loss_values = _read_beam(loss_results_fn)
+
+        # if idx == 0:
+        #     epochs = np.delete(epochs, -1)
+        #     loss_values = np.delete(loss_values, -1)
+
+        plt.plot(epochs, loss_values, color=colors[idx], marker=marker, linewidth=linewidth)
+    plt.xlabel('Depth')
     plt.ylabel('Loss')
+    plt.legend(['e=2', 'e=2 w/o lookahead', 'e=5 w/o lookahead'], markerscale=0)
+
     plt.subplot(122)
-    plt.plot(epochs_sim, sim_values)
-    plt.title('SIM')
-    plt.ylabel('% successful grasps')
-    plt.xlabel('Epochs')
-    plt.suptitle('Loss as heuristic')
+    for idx, sim_path in enumerate(sim_paths):
+        sim_results_fn = sim_path + 'results.txt'
+
+        sim_epochs, sim_values = _read_simulation(sim_results_fn)
+        # sim_epochs = np.insert(sim_epochs, 0, -1) + 1
+        # sim_values = np.insert(sim_values, 0, starting_values[idx])
+
+        if idx == 0:
+            sim_epochs = np.insert(sim_epochs, 0, -1) + 1
+            sim_values = np.insert(sim_values, 0, 0.78)
+
+        plt.plot(sim_epochs, sim_values, color=colors[idx], marker=marker, linewidth=linewidth)
+
+    plt.legend(['e=2', 'e=2 w/o lookahead', 'e=5 w/o lookahead'], markerscale=0)
+    plt.xlabel('Depth')
+    plt.ylabel('% Successful grasps')
+    plt.suptitle('Beam Search loss as heuristic')
 
 
 if __name__ == '__main__':
     # simulator_baseline()
     # jacquard_baseline()
     # beam_search_improve()
-    # beam_search_optimize()
-    beam_loss()
+    beam_search_optimize()
+    # beam_loss()
     plt.show()

@@ -18,6 +18,14 @@
           <option name="port" value="22" />
         </fileTransfer>
       </webServer>
+      <webServer id="dcf206c5-090d-4812-a2c8-9656de399cc7" name="Peregrine Data" url="http://peregrine.hpc.rug.nl">
+        <fileTransfer host="peregrine.hpc.rug.nl" port="22" rootFolder="/data/s3485781" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
     </option>
   </component>
 </project>

@@ -355,15 +355,15 @@ class OrthoNet:
         roi = roi or [-np.inf, np.inf] * 3
 
         # Forward transform
-        camera_cloud = PointCloud(cloud)
+        camera_cloud = PointCloud(cloud)  # w.r.t camera frame
         while True:
             try:
-                plane_cloud = camera_cloud.find_plane()
-                plane_cloud, tf_camera_to_plane = plane_cloud.pca()
+                plane_cloud = camera_cloud.find_plane()  # Largest plane w.r.t camera frame
+                plane_cloud, tf_camera_to_plane = plane_cloud.pca()  # Largest plane w.r.t plane itself
                 table_cloud = tf_camera_to_plane.transform(camera_cloud)
-                roi_cloud = table_cloud.filter_roi(roi)
-                object_cloud = roi_cloud.remove_plane()
-                object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])
+                roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
+                object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
+                object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
             except AssertionError as e:
                 print('Caught error: {}, retrying'.format(e))
                 continue
@@ -514,11 +514,15 @@ def render_pose(cloud, position, z, y, width):
     viewer.attributes(colors)
     viewer.set(point_size=0.0005)
 
+def render(cloud):
+    pptk.viewer(cloud.cloud)
+    raw_input('key to continue')
+
 
 if __name__ == '__main__':
     import pylab as plt
     cloud = PointCloud.from_npy('../test/points.npy')
-    onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/results/beam_search_last/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
+    onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/beam_search_transpose/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
     point, orientation, angle, width = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
 
     plt.pause(1e5)

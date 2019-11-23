@@ -11,4 +11,4 @@
 source ~/msc-thesis/jobs/.ml_gpu.sh
 source ~/msc-thesis/.gpu/bin/activate
 cd ~/msc-thesis
-python scripts/optimize_network.py /home/s3485781/DATA/networks/ggcnn_rss/epoch_29_model.hdf5 /home/s3485781/DATA/ggcnn/data/datasets/D.hdf5 --epochs 2 --depth 5
+python scripts/optimize_network.py /home/s3485781/DATA/networks/ggcnn_rss/epoch_29_model.hdf5 /home/s3485781/DATA/ggcnn/data/datasets/D.hdf5 --epochs 2 --depth 5 --no_lookahead --heuristic iou
