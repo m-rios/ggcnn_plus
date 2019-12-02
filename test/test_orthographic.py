@@ -8,6 +8,8 @@ import pylab as plt
 import numpy as np
 import os
 import h5py
+import pptk
+import core.orthographic
 
 
 class TestOrthographic(TestCase):
@@ -71,40 +73,20 @@ class TestOrthographic(TestCase):
 
     def test_to_depth(self):
 
-        cloud = PointCloud(self.pcd)
+        cloud = PointCloud(np.load('object_cloud.npy'))
 
-        ax = self.render_pcd(self.pcd)
-        self.render_frame(ax, np.zeros(3), np.eye(3))
+        pos = np.array([0, 0, 0])
+        frame = np.eye(3)
+        core.orthographic.render_frame(pos, frame[0], frame[1], frame[2], cloud=cloud)
 
-        plt.figure()
-        plt.subplot(2, 2, 1)
-        xs, ys = self.pcd[:, [1, 2]].T
-        plt.scatter(xs, ys)
-        plt.title('Front')
-        plt.subplot(2, 2, 2)
-        xs, ys = self.pcd[:, [0, 2]].T
-        plt.scatter(-xs, ys)
-        plt.title('Right')
-        plt.subplot(2, 2, 3)
-        xs, ys = self.pcd[:, [0, 1]].T
-        plt.scatter(xs, ys)
-        plt.title('Top')
-
-        front = cloud.to_depth(index=0)
-        right = cloud.to_depth(index=1)
-        top = cloud.to_depth(index=2)
-
-        plt.figure()
-        plt.subplot(2, 2, 1)
-        plt.imshow(front)
-        plt.title('Front')
-        plt.subplot(2, 2, 2)
-        plt.imshow(right)
-        plt.title('Right')
-        plt.subplot(2, 2, 3)
-        plt.imshow(top)
-        plt.title('Top')
-
+        front, right, top = cloud.orthographic_depth()
+        plt.subplot(131)
+        plt.imshow(front.img)
+        plt.subplot(132)
+        plt.imshow(right.img)
+        plt.subplot(133)
+        plt.imshow(top.img)
+        plt.colorbar()
         plt.show()
 
     def test_remove_plane(self):

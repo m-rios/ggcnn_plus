@@ -55,29 +55,37 @@ class Transform:
 
 
 class Depth:
-    def __init__(self, img, inverse_transform, pixel_radius, index):
+    def __init__(self, img, inverse_transform, pixel_radius, index, blur=2.):
         self.img = img
         self.inverse_transform = inverse_transform
         self.index = index
 
         self._apply_radius(pixel_radius)
         self.fill_missing()
-        self.blur(2.)
+        self.invert_distance()
+        self.blur(blur)
 
     def _apply_radius(self, pixel_radius):
         filled = np.argwhere(np.logical_not(np.isinf(self.img)))
-        new_img = np.ones(self.img.shape) * np.inf
+        new_img = np.ones(self.img.shape) * -np.inf
 
         for r, c in filled:
             rs = range(r - pixel_radius, r + pixel_radius + 1)
             cs = range(c - pixel_radius, c + pixel_radius + 1)
-            new_img[np.ix_(rs, cs)] = np.minimum(new_img[np.ix_(rs, cs)], np.full((2*pixel_radius + 1,)*2, self.img[r, c]))
+            new_img[np.ix_(rs, cs)] = np.maximum(new_img[np.ix_(rs, cs)], np.full((2*pixel_radius + 1,)*2, self.img[r, c]))
 
         self.img = new_img
 
     def blur(self, sigma):
         """Applies gaussian blur"""
         self.img = gaussian(self.img, sigma, preserve_range=True)
+
+    def invert_distance(self):
+        """Inverts the depth values of the pixels so that instead of representing the distance from the origin it
+        shows the distance to the virtual camera or viceversa"""
+        _max = np.max(self.img)
+        _min = np.min(self.img)
+        self.img = _max - self.img + _min
 
     def fill_missing(self):
         # missing_idx = np.isinf(self.img)
@@ -88,7 +96,7 @@ class Depth:
 
         # Old version
         missing_idx = np.isinf(self.img)
-        fill_value = np.max(self.img[np.logical_not(missing_idx)])
+        fill_value = np.min(self.img[np.logical_not(missing_idx)])
         self.img[missing_idx] = fill_value
 
     def to_object(self, uv, approach_direction=1):
@@ -135,13 +143,16 @@ class PointCloud:
         return self.cloud.T[:2].T
 
     def front_depth(self, approach_direction=1, shape=300):
-        return self.to_depth(shape, 0, approach_direction=approach_direction)
+        return self.to_depth(shape, 0)
 
     def right_depth(self, approach_direction=1, shape=300):
-        return self.to_depth(shape, 1, approach_direction=approach_direction)
+        return self.to_depth(shape, 1)
 
     def top_depth(self, approach_direction=1, shape=300):
-        return self.to_depth(shape, 2, approach_direction=approach_direction)
+        return self.to_depth(shape, 2)
+
+    def orthographic_depth(self, shape=300):
+        return [self.front_depth(shape=shape), self.right_depth(shape=shape), self.top_depth(shape=shape)]
 
     def pixel_size(self, shape):
         """
@@ -163,7 +174,52 @@ class PointCloud:
         r = R.from_rotvec(axis*angle)
         return PointCloud(r.apply(self.cloud))
 
-    def to_depth(self, shape=300, index=0, padding=7, pixel_radius=3, approach_direction=1):
+    def to_depth(self, shape=300, index=0, padding=7, pixel_radius=3, blur=2.):
+        """
+        Construct depth image from point cloud. Index axis points towards the direction the camera is aiming (i.e.
+        negative values occlude positive
+        :param shape: output shape of the depth image (only one value, output is squared)
+        :param index: column index in pc that defines depth
+        :param padding: number of pixels to pad the image (same for all sides)
+        :param pixel_radius: radius in pixels of each point in the cloud
+        :param blur: blur coefficient for generating the final depth image
+        :return: ndarray of shape shape with depth information
+        """
+        cloud = np.copy(self.cloud)
+        assert pixel_radius <= padding
+
+        inner_shape = shape - 2 * padding  # Shape of the image without the padding
+        depth = np.ones((shape, shape)) * -np.inf  # Initial depth image
+        spatial_idx = np.delete(range(3), index)  # Indices of the axes that represent the rows and columns of the image
+        pixel_size = self.pixel_size(inner_shape)  # Number of world units per pixel (same for the 3 projections)
+
+        _min = np.min(cloud[:, spatial_idx], axis=0)
+        _max = np.max(cloud[:, spatial_idx], axis=0)
+        cloud_center = _min + (_max - _min) / 2.  # Cloud center in object coordinates
+
+        cloud[:, spatial_idx] -= cloud_center  # Center the cloud around 0
+
+        image_center = np.floor(shape / 2.)
+        image_center = np.array([image_center, image_center])
+
+        for p in cloud:
+            c, r = (p[spatial_idx] / pixel_size + image_center).astype(np.int)
+            if index == 0:  # -z is row and y is col
+                r = shape - 1 - r
+                inverse_transform = lambda pixel: np.array([0., 0.])
+            elif index == 1:  # -z is row and -x is col
+                r = shape - 1 - r
+                c = shape - 1 - c
+                inverse_transform = lambda pixel: np.array([0., 0.])
+            else:  # x is col and -y is row
+                r = shape - 1 - r
+                inverse_transform = lambda pixel: np.array([0., 0.])
+
+            depth[r, c] = max(depth[r, c], p[index])
+
+        return Depth(depth, inverse_transform, pixel_radius, index, blur)
+
+    def to_depth_old(self, shape=300, index=0, padding=7, pixel_radius=3, approach_direction=1):
         """
         Construct depth image from point cloud. Index axis points towards the direction the camera is aiming (i.e.
         negative values occlude positive
@@ -173,41 +229,46 @@ class PointCloud:
         :param approach_direction: whether to approach from the positive or negative side of the index axis
         :return: ndarray of shape shape with depth information
         """
+        print 'Approach direction of index {}: {}'.format(index, approach_direction)
+        cloud = np.copy(self.cloud)
         assert pixel_radius <= padding
-        approach_direction = approach_direction or 1
+        if approach_direction is None:
+            approach_direction = 1
         approach_direction /= np.abs(approach_direction)  # Make sure it's normal
-        # self.cloud[:, index] *= approach_direction
+        if index in [0, 1]:
+            cloud[:, [0, 1]] *= approach_direction  # Rotate x, y by 180 if approach direction is -1
+
         final_shape = shape
         shape -= padding*2
         depth = np.ones((final_shape, final_shape)) * np.inf
         spatial_idx = np.delete(range(3), index)
 
         # Calculate pixel size (same for all axes and all views)
-        min_ = np.min(self.cloud[:, spatial_idx], axis=0)
-        max_ = np.max(self.cloud[:, spatial_idx], axis=0)
+        min_ = np.min(cloud[:, spatial_idx], axis=0)
+        max_ = np.max(cloud[:, spatial_idx], axis=0)
 
         pixel_size = self.pixel_size(shape)
         center = (max_ - min_)/2.  # Center of the object in world units
         t = (shape/2. - 1 - center/pixel_size).astype(np.int)  # Translation from center w.r.t. min_ to image center
 
-        for p in self.cloud:
+        for p in cloud:
             r, c = ((p[spatial_idx] - min_)/pixel_size).astype(np.int) + padding + t
             depth[r, c] = min(p[index], depth[r, c])
 
         # Swap rows for columns (e.g. rows vertical but x horizontal)
-        depth = depth.T
+        # depth = depth.T
 
         # Reverse columns for side view (x points left)
-        if index == 1:
-            depth = depth[:, ::-1]
+        # if index == 1:
+        #     depth = depth[:, ::-1]
 
         # Reverse rows (origin at upper left corner in image space)
-        depth = depth[::-1]
+        # depth = depth[::-1]
 
         def inverse_transform(pixel):
             return (pixel - padding - t)*pixel_size + min_
 
-        # self.cloud[:, index] *= approach_direction
+        # cloud[:, index] *= approach_direction
         return Depth(depth, inverse_transform, pixel_radius, index)
 
     def orthographic_projection(self):
@@ -356,36 +417,54 @@ class OrthoNet:
 
         # Forward transform
         camera_cloud = PointCloud(cloud)  # w.r.t camera frame
+        camera_position = np.array([0., 0., 0.])  # Position of the camera w.r.t. camera frame
+        camera_orientation = np.array([0., 0., 1.])  # Direction the camera is aiming towards w.r.t. camera frame
+        camera_frame = np.eye(3)
+        camera_x = np.array([1., 0., 0.])  # Direction of the camera body
+        # render_pose(camera_cloud, camera_position, camera_orientation, camera_x, 1)
+        # render_frame(camera_position, camera_frame[:,0], camera_frame[:, 1], camera_frame[:, 2])
         while True:
             try:
                 plane_cloud = camera_cloud.find_plane()  # Largest plane w.r.t camera frame
                 plane_cloud, tf_camera_to_plane = plane_cloud.pca()  # Largest plane w.r.t plane itself
+                camera_position_plane = tf_camera_to_plane.transform(camera_position)  # Camera position w.r.t. the plane frame of reference
+                camera_orientation_plane = tf_camera_to_plane.transform(camera_orientation)  # Camera orientation w.r.t. the plane frame of reference
+                camera_y_plane = tf_camera_to_plane.transform(camera_x)
+                camera_frame_plane = tf_camera_to_plane.transform(camera_frame)
                 table_cloud = tf_camera_to_plane.transform(camera_cloud)
+                # render_pose(table_cloud, camera_position_plane, camera_orientation_plane, camera_y_plane, 1, True)
+                # render_frame(camera_position, camera_frame_plane[:, 0], camera_frame_plane[:, 1], camera_frame_plane[:, 2])
+                # render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1],
+                #              camera_frame_plane[2], wait=True)
                 roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
                 object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
                 object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
+                camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
+                camera_orientation_object = tf_roi_to_object.transform(camera_orientation_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
             except AssertionError as e:
                 print('Caught error: {}, retrying'.format(e))
                 continue
             break
 
-        camera_center = tf_camera_to_plane.transform([0, 0, 0])
-        camera_target = tf_camera_to_plane.transform([0, 0, 1])
-        camera_center = tf_roi_to_object.transform(camera_center, axes=[0, 1])
-        camera_target = tf_roi_to_object.transform(camera_target, axes=[0, 1])
-        render_pose(object_cloud, camera_center, camera_target - camera_center, np.array([[0., 1., 0.]]), 0.1)
-
+        # camera_center = tf_camera_to_plane.transform([0, 0, 0])
+        # camera_target = tf_camera_to_plane.transform([0, 0, 1])
+        # camera_center = tf_roi_to_object.transform(camera_center, axes=[0, 1])
+        # camera_target = tf_roi_to_object.transform(camera_target, axes=[0, 1])
+        # render_pose(object_cloud, camera_center, camera_target - camera_center, np.array([[0., 1., 0.]]), 0.1)
+        eye = np.eye(3)
+        render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=True, cloud=object_cloud)
         # Prediction
-        d1 = np.sign(np.dot(camera_target[0], [-1, 0, 0]))
-        d2 = np.sign(np.dot(camera_target[0], [0, -1, 0]))
-        d3 = np.sign(np.dot(camera_target[0], [0, 0, -1]))
+        d1 = np.sign(np.dot(camera_orientation_object, [1, 0, 0]))
+        d2 = np.sign(np.dot(camera_orientation_object, [0, 1, 0]))
+
+        np.save('object_cloud', object_cloud.cloud)
+
         depths = [object_cloud.front_depth(approach_direction=d1),
                   object_cloud.right_depth(approach_direction=d2),
-                  object_cloud.top_depth(approach_direction=d3)]
-        positions = []
-        zs = []
-        ys = []
-        widths = []
+                  object_cloud.top_depth(approach_direction=-1)]  # For z it's always inverted since camera is aiming down and table normal up
+        # TODO: what if PCA gives downwards vector after RANSAC?
+        positions, zs, ys, widths = [], [], [], []
+
         for index, depth in enumerate(depths):
             position, z, y, width = predictor(depth, index)
             render_pose(object_cloud, position, z, y, width)
@@ -397,18 +476,18 @@ class OrthoNet:
 
             camera_position = tf_camera_to_plane.transform_inverse(roi_position)
             camera_orientation = tf_camera_to_plane.transform_inverse(roi_orientation)
-            camera_y = tf_camera_to_plane.transform_inverse(roi_y)
+            camera_x = tf_camera_to_plane.transform_inverse(roi_y)
             roi_com = tf_camera_to_plane.transform_inverse(np.zeros((1, 3)))
             camera_orientation -= roi_com
-            camera_y -= roi_com
+            camera_x -= roi_com
             camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
-            camera_y = camera_y / np.linalg.norm(camera_y)
+            camera_x = camera_x / np.linalg.norm(camera_x)
 
             # render_pose(camera_cloud, camera_position, camera_orientation, camera_y, width)
 
             positions.append(camera_position)
             zs.append(camera_orientation/np.linalg.norm(camera_orientation))
-            ys.append(camera_y/np.linalg.norm(camera_y))
+            ys.append(camera_x/np.linalg.norm(camera_x))
             widths.append(width)
 
         return positions, zs, ys, widths
@@ -500,12 +579,15 @@ class OrthoNet:
 
         return np.reshape(point, (1, 3)), z, y, width
 
-def render_pose(cloud, position, z, y, width):
+
+def render_pose(cloud, position, z, y, width, wait=False):
     cloud = cloud.cloud
-    z *= width
-    y *= width/2.
+    z *= float(width)
+    # y *= width/2.
+    y *= float(width)
     z_axis = np.linspace(position, position + z, 1e3).squeeze()
-    y_axis = np.linspace(position - y, position + y, 1e3).squeeze()
+    y_axis = np.linspace(position, position + y, 1e3).squeeze()
+    # y_axis = np.linspace(position - y, position + y, 1e3).squeeze()
     blue = np.repeat([[0, 0, 1]], z_axis.shape[0], axis=0)
     green = np.repeat([[0, 1, 0]], y_axis.shape[0], axis=0)
     colors = np.concatenate((np.ones(cloud.shape), blue, green))
@@ -514,9 +596,41 @@ def render_pose(cloud, position, z, y, width):
     viewer.attributes(colors)
     viewer.set(point_size=0.0005)
 
-def render(cloud):
+    if wait:
+        raw_input('Enter to continue')
+
+
+def render_frame(position, x, y, z, wait=False, cloud=None):
+    x_axis = np.linspace(position, position + x, 1e3).squeeze()
+    y_axis = np.linspace(position, position + y, 1e3).squeeze()
+    z_axis = np.linspace(position, position + z, 1e3).squeeze()
+
+    r = np.repeat([[1, 0, 0]], x_axis.shape[0], axis=0)
+    g = np.repeat([[0, 1, 0]], y_axis.shape[0], axis=0)
+    b = np.repeat([[0, 0, 1]], z_axis.shape[0], axis=0)
+
+    colors = np.concatenate((r, g, b))
+
+    all_points = np.concatenate((x_axis, y_axis, z_axis))
+
+    if cloud is not None:
+        cloud_points = cloud.cloud
+        all_points = np.concatenate((cloud_points, all_points))
+        w = np.repeat([[1, 1, 1]], cloud_points.shape[0], axis=0)
+        colors = np.concatenate((w, colors))
+
+    viewer = pptk.viewer(all_points)
+    viewer.attributes(colors)
+    viewer.set(point_size=0.0005)
+
+    if wait:
+        viewer.wait()
+
+
+def render(cloud, wait=False):
     pptk.viewer(cloud.cloud)
-    raw_input('key to continue')
+    if wait:
+        raw_input('key to continue')
 
 
 if __name__ == '__main__':
