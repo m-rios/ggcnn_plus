@@ -219,58 +219,6 @@ class PointCloud:
 
         return Depth(depth, inverse_transform, pixel_radius, index, blur)
 
-    def to_depth_old(self, shape=300, index=0, padding=7, pixel_radius=3, approach_direction=1):
-        """
-        Construct depth image from point cloud. Index axis points towards the direction the camera is aiming (i.e.
-        negative values occlude positive
-        :param shape: output shape of the depth image (only one value, output is squared)
-        :param index: column index in pc that defines depth
-        :param missing: default value for missing-data
-        :param approach_direction: whether to approach from the positive or negative side of the index axis
-        :return: ndarray of shape shape with depth information
-        """
-        print 'Approach direction of index {}: {}'.format(index, approach_direction)
-        cloud = np.copy(self.cloud)
-        assert pixel_radius <= padding
-        if approach_direction is None:
-            approach_direction = 1
-        approach_direction /= np.abs(approach_direction)  # Make sure it's normal
-        if index in [0, 1]:
-            cloud[:, [0, 1]] *= approach_direction  # Rotate x, y by 180 if approach direction is -1
-
-        final_shape = shape
-        shape -= padding*2
-        depth = np.ones((final_shape, final_shape)) * np.inf
-        spatial_idx = np.delete(range(3), index)
-
-        # Calculate pixel size (same for all axes and all views)
-        min_ = np.min(cloud[:, spatial_idx], axis=0)
-        max_ = np.max(cloud[:, spatial_idx], axis=0)
-
-        pixel_size = self.pixel_size(shape)
-        center = (max_ - min_)/2.  # Center of the object in world units
-        t = (shape/2. - 1 - center/pixel_size).astype(np.int)  # Translation from center w.r.t. min_ to image center
-
-        for p in cloud:
-            r, c = ((p[spatial_idx] - min_)/pixel_size).astype(np.int) + padding + t
-            depth[r, c] = min(p[index], depth[r, c])
-
-        # Swap rows for columns (e.g. rows vertical but x horizontal)
-        # depth = depth.T
-
-        # Reverse columns for side view (x points left)
-        # if index == 1:
-        #     depth = depth[:, ::-1]
-
-        # Reverse rows (origin at upper left corner in image space)
-        # depth = depth[::-1]
-
-        def inverse_transform(pixel):
-            return (pixel - padding - t)*pixel_size + min_
-
-        # cloud[:, index] *= approach_direction
-        return Depth(depth, inverse_transform, pixel_radius, index)
-
     def orthographic_projection(self):
         """
         Projects a point cloud into three orthogonal views
