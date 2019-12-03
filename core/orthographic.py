@@ -57,6 +57,7 @@ class Transform:
 class Depth:
     def __init__(self, img, inverse_transform, pixel_radius, index, blur=2.):
         self.img = img
+        # Convert a pixel coordinate to a 2-dimensional world coordinate
         self.inverse_transform = inverse_transform
         self.index = index
 
@@ -80,31 +81,30 @@ class Depth:
         """Applies gaussian blur"""
         self.img = gaussian(self.img, sigma, preserve_range=True)
 
-    def invert_distance(self):
+    def invert_distance(self, uv=None):
         """Inverts the depth values of the pixels so that instead of representing the distance from the origin it
-        shows the distance to the virtual camera or viceversa"""
+        shows the distance to the virtual camera or viceversa
+        :param uv: tuple with row and column to be inverted. If none is supplied it inverts the whole object
+        :return the inverted value if uv was supplied, None otherwise
+        """
+        if uv is None:
+            self.img = self._invert_distance(self.img)
+        else:
+            return self._invert_distance(self.img[uv[0], uv[1]])
+
+    def _invert_distance(self, value):
         _max = np.max(self.img)
         _min = np.min(self.img)
-        self.img = _max - self.img + _min
+        return _max - value + _min
 
     def fill_missing(self):
-        # missing_idx = np.isinf(self.img)
-        # not_missing = self.img[np.logical_not(missing_idx)]
-        # mean, sigma = not_missing.mean(), not_missing.std()
-        # fill_value = mean - 2*sigma
-        # self.img[missing_idx] = fill_value
-
-        # Old version
         missing_idx = np.isinf(self.img)
         fill_value = np.min(self.img[np.logical_not(missing_idx)])
         self.img[missing_idx] = fill_value
 
-    def to_object(self, uv, approach_direction=1):
-        uv = np.array(uv)
-        u_ = uv[1]
-        v_ = self.img.shape[0] - uv[0] - 1
-        xy = self.inverse_transform(np.array([u_, v_]))
-        d = self.img[uv[0], uv[1]]
+    def to_object(self, uv):
+        xy = self.inverse_transform(*uv)
+        d = self._invert_distance(self.img[uv[0], uv[1]])
         return np.insert(xy, self.index, d)
 
 
@@ -206,16 +206,28 @@ class PointCloud:
             c, r = (p[spatial_idx] / pixel_size + image_center).astype(np.int)
             if index == 0:  # -z is row and y is col
                 r = shape - 1 - r
-                inverse_transform = lambda pixel: np.array([0., 0.])
             elif index == 1:  # -z is row and -x is col
                 r = shape - 1 - r
                 c = shape - 1 - c
-                inverse_transform = lambda pixel: np.array([0., 0.])
             else:  # x is col and -y is row
                 r = shape - 1 - r
-                inverse_transform = lambda pixel: np.array([0., 0.])
-
             depth[r, c] = max(depth[r, c], p[index])
+
+        if index == 0:
+            inverse_transform = lambda r, c: np.array([
+                (c - image_center[0]) * pixel_size + cloud_center[0],
+                (shape - 1 - r - image_center[1]) * pixel_size + cloud_center[1]
+            ]).astype(np.float)
+        elif index == 1:
+            inverse_transform = lambda r, c: np.array([
+                (shape - 1 - c - image_center[0]) * pixel_size + cloud_center[0],
+                (shape - 1 - r - image_center[1]) * pixel_size + cloud_center[1]
+            ]).astype(np.float)
+        else:
+            inverse_transform = lambda r, c: np.array([
+                (c - image_center[0]) * pixel_size + cloud_center[0],
+                (shape - 1 - r - image_center[1]) * pixel_size + cloud_center[1]
+            ]).astype(np.float)
 
         return Depth(depth, inverse_transform, pixel_radius, index, blur)
 

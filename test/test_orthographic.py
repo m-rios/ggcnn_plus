@@ -89,6 +89,46 @@ class TestOrthographic(TestCase):
         plt.colorbar()
         plt.show()
 
+    def test_inverse_transform(self):
+        cloud = PointCloud(np.load('object_cloud.npy'))
+
+        pos = np.array([0, 0, 0])
+        frame = np.eye(3)
+        core.orthographic.render_frame(pos, frame[0], frame[1], frame[2], cloud=cloud)
+
+        blue = np.array([[0, 0, 1]])
+        colors = np.concatenate((np.ones(cloud.cloud.shape), blue))
+
+        front = cloud.front_depth()
+        right = cloud.right_depth()
+        top = cloud.top_depth()
+
+        points = np.concatenate((cloud.cloud, front.to_object((21, 110)).reshape(1, 3)))
+        viewer = pptk.viewer(points)
+        viewer.attributes(colors)
+        viewer.set(point_size=0.0005)
+
+        points = np.concatenate((cloud.cloud, right.to_object((21, 110)).reshape(1, 3)))
+        viewer = pptk.viewer(points)
+        viewer.attributes(colors)
+        viewer.set(point_size=0.0005)
+
+        points = np.concatenate((cloud.cloud, top.to_object((191, 198)).reshape(1, 3)))
+        viewer = pptk.viewer(points)
+        viewer.attributes(colors)
+        viewer.set(point_size=0.0005)
+
+        plt.subplot(131)
+        plt.imshow(front.img)
+        plt.scatter([110], [21])
+        plt.subplot(132)
+        plt.imshow(right.img)
+        plt.scatter([110], [21])
+        plt.subplot(133)
+        plt.imshow(top.img)
+        plt.scatter([198], [191])
+        plt.show()
+
     def test_remove_plane(self):
         cloud = PointCloud(self.pcd)
         self.render_pcd(self.pcd)
