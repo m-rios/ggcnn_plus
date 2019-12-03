@@ -417,8 +417,6 @@ class OrthoNet:
         d1 = np.sign(np.dot(camera_orientation_object, [1, 0, 0]))
         d2 = np.sign(np.dot(camera_orientation_object, [0, 1, 0]))
 
-        np.save('object_cloud', object_cloud.cloud)
-
         depths = [object_cloud.front_depth(approach_direction=d1),
                   object_cloud.right_depth(approach_direction=d2),
                   object_cloud.top_depth(approach_direction=-1)]  # For z it's always inverted since camera is aiming down and table normal up
