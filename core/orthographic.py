@@ -174,6 +174,9 @@ class PointCloud:
         r = R.from_rotvec(axis*angle)
         return PointCloud(r.apply(self.cloud))
 
+    def orient_to_camera(self, camera_position):
+        raise NotImplemented
+
     def to_depth(self, shape=300, index=0, padding=7, pixel_radius=3, blur=2.):
         """
         Construct depth image from point cloud. Index axis points towards the direction the camera is aiming (i.e.
@@ -377,10 +380,8 @@ class OrthoNet:
 
         # Forward transform
         camera_cloud = PointCloud(cloud)  # w.r.t camera frame
-        camera_position = np.array([0., 0., 0.])  # Position of the camera w.r.t. camera frame
-        camera_orientation = np.array([0., 0., 1.])  # Direction the camera is aiming towards w.r.t. camera frame
+        camera_position = np.array([0., 0., 0.]).reshape((1, 3))  # Position of the camera w.r.t. camera frame
         camera_frame = np.eye(3)
-        camera_x = np.array([1., 0., 0.])  # Direction of the camera body
         # render_pose(camera_cloud, camera_position, camera_orientation, camera_x, 1)
         # render_frame(camera_position, camera_frame[:,0], camera_frame[:, 1], camera_frame[:, 2])
         while True:
@@ -388,38 +389,31 @@ class OrthoNet:
                 plane_cloud = camera_cloud.find_plane()  # Largest plane w.r.t camera frame
                 plane_cloud, tf_camera_to_plane = plane_cloud.pca()  # Largest plane w.r.t plane itself
                 camera_position_plane = tf_camera_to_plane.transform(camera_position)  # Camera position w.r.t. the plane frame of reference
-                camera_orientation_plane = tf_camera_to_plane.transform(camera_orientation)  # Camera orientation w.r.t. the plane frame of reference
-                camera_y_plane = tf_camera_to_plane.transform(camera_x)
-                camera_frame_plane = tf_camera_to_plane.transform(camera_frame)
+                camera_frame_plane = tf_camera_to_plane.transform(camera_frame)  # Camera orientation w.r.t. the plane frame of reference
                 table_cloud = tf_camera_to_plane.transform(camera_cloud)
                 # render_pose(table_cloud, camera_position_plane, camera_orientation_plane, camera_y_plane, 1, True)
-                # render_frame(camera_position, camera_frame_plane[:, 0], camera_frame_plane[:, 1], camera_frame_plane[:, 2])
+                render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2], cloud=table_cloud)
                 # render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1],
                 #              camera_frame_plane[2], wait=True)
                 roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
                 object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
                 object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
-                camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
-                camera_orientation_object = tf_roi_to_object.transform(camera_orientation_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
+                # camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
+                # camera_orientation_object = tf_roi_to_object.transform(camera_orientation_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
             except AssertionError as e:
                 print('Caught error: {}, retrying'.format(e))
                 continue
             break
 
-        # camera_center = tf_camera_to_plane.transform([0, 0, 0])
-        # camera_target = tf_camera_to_plane.transform([0, 0, 1])
-        # camera_center = tf_roi_to_object.transform(camera_center, axes=[0, 1])
-        # camera_target = tf_roi_to_object.transform(camera_target, axes=[0, 1])
-        # render_pose(object_cloud, camera_center, camera_target - camera_center, np.array([[0., 1., 0.]]), 0.1)
         eye = np.eye(3)
         render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=True, cloud=object_cloud)
         # Prediction
-        d1 = np.sign(np.dot(camera_orientation_object, [1, 0, 0]))
-        d2 = np.sign(np.dot(camera_orientation_object, [0, 1, 0]))
+        # d1 = np.sign(np.dot(camera_orientation_object, [1, 0, 0]))
+        # d2 = np.sign(np.dot(camera_orientation_object, [0, 1, 0]))
 
-        depths = [object_cloud.front_depth(approach_direction=d1),
-                  object_cloud.right_depth(approach_direction=d2),
-                  object_cloud.top_depth(approach_direction=-1)]  # For z it's always inverted since camera is aiming down and table normal up
+        depths = [object_cloud.front_depth(),
+                  object_cloud.right_depth(),
+                  object_cloud.top_depth()]
         # TODO: what if PCA gives downwards vector after RANSAC?
         positions, zs, ys, widths = [], [], [], []
 
@@ -559,9 +553,9 @@ def render_pose(cloud, position, z, y, width, wait=False):
 
 
 def render_frame(position, x, y, z, wait=False, cloud=None):
-    x_axis = np.linspace(position, position + x, 1e3).squeeze()
-    y_axis = np.linspace(position, position + y, 1e3).squeeze()
-    z_axis = np.linspace(position, position + z, 1e3).squeeze()
+    x_axis = np.linspace(position, x, 1e3).squeeze()
+    y_axis = np.linspace(position, y, 1e3).squeeze()
+    z_axis = np.linspace(position, z, 1e3).squeeze()
 
     r = np.repeat([[1, 0, 0]], x_axis.shape[0], axis=0)
     g = np.repeat([[0, 1, 0]], y_axis.shape[0], axis=0)

@@ -3,6 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/.venv/lib/python2.7/site-packages/ggcnn" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dissertation" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/extended_abstract" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/ggcnn" vcs="Git" />
   </component>
