@@ -381,7 +381,7 @@ class OrthoNet:
         # Forward transform
         camera_cloud = PointCloud(cloud)  # w.r.t camera frame
         camera_position = np.array([0., 0., 0.]).reshape((1, 3))  # Position of the camera w.r.t. camera frame
-        camera_frame = np.eye(3)
+        camera_frame = np.eye(3)  # Rows are the frame axes
         # render_pose(camera_cloud, camera_position, camera_orientation, camera_x, 1)
         # render_frame(camera_position, camera_frame[:,0], camera_frame[:, 1], camera_frame[:, 2])
         while True:
@@ -398,22 +398,27 @@ class OrthoNet:
                 roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
                 object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
                 object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
-                # camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
-                # camera_orientation_object = tf_roi_to_object.transform(camera_orientation_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
+                camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
+                camera_frame_object = tf_roi_to_object.transform(camera_frame_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
             except AssertionError as e:
                 print('Caught error: {}, retrying'.format(e))
                 continue
             break
 
         eye = np.eye(3)
+        render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2], wait=False, cloud=object_cloud)
         render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=True, cloud=object_cloud)
         # Prediction
         # d1 = np.sign(np.dot(camera_orientation_object, [1, 0, 0]))
         # d2 = np.sign(np.dot(camera_orientation_object, [0, 1, 0]))
 
-        depths = [object_cloud.front_depth(),
-                  object_cloud.right_depth(),
-                  object_cloud.top_depth()]
+        (front_cloud, fidx, frotated), \
+        (side_cloud, sidx, srotated), \
+        (top_cloud, tidx, trotated) = orient_object_cloud(object_cloud, camera_position_object, camera_frame_object)
+
+        depths = [front_cloud.to_depth(index=fidx),
+                  side_cloud.to_depth(index=sidx),
+                  top_cloud.to_depth(index=tidx)]
         # TODO: what if PCA gives downwards vector after RANSAC?
         positions, zs, ys, widths = [], [], [], []
 
@@ -550,6 +555,31 @@ def render_pose(cloud, position, z, y, width, wait=False):
 
     if wait:
         raw_input('Enter to continue')
+
+
+def orient_object_cloud(cloud, camera_position, camera_frame):
+    camera_z = (camera_frame[2] - camera_position).flatten()
+
+    # Find index of front and side axes (based on cosine between object cloud and camera vector)
+    side_idx, front_idx = np.argsort(np.abs(camera_z[:2]))
+    top_idx = 2
+
+    # Front view
+    front_cloud = PointCloud(np.copy(cloud.cloud))
+    front_rotated = camera_z[front_idx] > 0
+    if front_rotated:
+        print('Front view was rotated')
+        front_cloud.cloud[:, :2] *= -1  # Rotate 180 around z
+    # Side view
+    side_cloud = PointCloud(np.copy(cloud.cloud))
+    side_rotated = camera_z[side_idx] > 0
+    if side_rotated:
+        print('Side view was rotated')
+        side_cloud.cloud[:, :2] *= -1  # Rotate 180 around z
+    # Top view (no need to rotate)
+    top_cloud = cloud
+
+    return (front_cloud, front_idx, front_rotated), (side_cloud, side_idx, side_rotated), (top_cloud, top_idx, False)
 
 
 def render_frame(position, x, y, z, wait=False, cloud=None):

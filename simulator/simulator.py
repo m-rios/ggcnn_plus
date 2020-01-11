@@ -323,7 +323,7 @@ class Simulator:
 
         obj_id = fn.split('/')[-1].replace('.obj', '')
 
-
+        print scale
 
         obj = Wavefront(visual_fn)
         size = obj.size

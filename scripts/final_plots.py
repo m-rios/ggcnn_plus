@@ -1,5 +1,7 @@
 import pylab as plt
 import numpy as np
+import h5py
+from ggcnn.dataset_processing.grasp import BoundingBoxes
 
 DEBUG = True
 OUTPUT_PATH = '/Users/mario/Dropbox/Apps/Texpad/Master thesis/Thesis/figures/'
@@ -272,11 +274,101 @@ def beam_loss():
     plt.ylabel('% Successful grasps')
     plt.suptitle('Beam Search loss as heuristic')
 
+def input_outputs():
+    from core.network import Network
+    from skimage.filters import gaussian
+    from ggcnn.dataset_processing.grasp import detect_grasps
+    from ggcnn.dataset_processing.grasp import BoundingBoxes, BoundingBox
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    ds = h5py.File('/Users/mario/Developer/msc-thesis/data/scenes/shapenetsem40_5.hdf5', 'r')
+    depth = ds['depth'][31]
+    net = Network('/Users/mario/Developer/msc-thesis/data/networks/beam_search_2/depth_3_arch_9x9x32_5x5x16_3x3x16_3x3x16_3x3x8_3x3x8_epoch_3_model.hdf5')
+    # net = Network('/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+    pos, cos_im, sin_im, wid = net.raw_predict(depth)
+
+    # pos = gaussian(pos.squeeze(), 5.0, preserve_range=True)
+    # wid = gaussian(wid.squeeze(), 5.0, preserve_range=True)
+    pos = pos.squeeze()
+    cos_im = cos_im.squeeze()
+    sin_im = sin_im.squeeze()
+    wid = wid.squeeze()
+
+    plt.figure('pos')
+    ax = plt.gca()
+    im = plt.imshow(pos)
+    plt.axis('off')
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("bottom", size="5%", pad=0.05)
+    cbar = plt.colorbar(im, cax=cax, ticks=[np.min(pos[:]), np.max(pos[:])], orientation='horizontal')
+    # cbar.ax.set_xticklabels(['0', np.max(pos[:]).astype(np.str)])
+
+    plt.figure('cos')
+    ax = plt.gca()
+    im = plt.imshow(cos_im)
+    plt.axis('off')
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("bottom", size="5%", pad=0.05)
+    cbar = plt.colorbar(im, cax=cax, ticks=[np.min(cos_im[:]), 0, np.max(cos_im[:])], orientation='horizontal')
+    # cbar.ax.set_xticklabels([np.min(cos_im[:]).astype(np.str), np.max(cos_im[:]).astype(np.str)])
+
+    plt.figure('sin')
+    ax = plt.gca()
+    im = plt.imshow(sin_im)
+    plt.axis('off')
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("bottom", size="5%", pad=0.05)
+    cbar = plt.colorbar(im, cax=cax, ticks=[np.min(sin_im[:]), 0, np.max(sin_im[:])], orientation='horizontal')
+    # cbar.ax.set_xticklabels([-1, 0, 1])
+
+    plt.figure('wid')
+    ax = plt.gca()
+    im = plt.imshow(wid)
+    plt.axis('off')
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("bottom", size="5%", pad=0.05)
+    cbar = plt.colorbar(im, cax=cax, ticks=[np.min(wid[:]), np.max(wid[:])], orientation='horizontal')
+    # cbar.ax.set_xticklabels(['0', '74'])
+
+    plt.figure()
+    plt.imshow(depth)
+    plt.axis('off')
+
+def jacquard_vs_cornell_dataset():
+    j = h5py.File('/Users/mario/Developer/msc-thesis/data/datasets/preprocessed/jacquard_samples.hdf5', 'r')['train']
+    # c = h5py.File('')
+
+    bbs = BoundingBoxes.load_from_array(j['bounding_boxes'][2])
+
+    plt.figure(figsize=(5, 2))
+    plt.subplot(251)
+    plt.imshow(j['depth_inpainted'][2])
+    plt.title('Depth')
+
+    plt.axis('off')
+    plt.subplot(252)
+    plt.imshow(j['grasp_points_img'][2])
+    plt.title('Grasp Quality')
+    plt.axis('off')
+    plt.subplot(253)
+    plt.imshow(j['grasp_width'][2])
+    plt.title('Width')
+    plt.axis('off')
+    plt.subplot(254)
+    plt.imshow(np.cos(2 * j['angle_img'][2]))
+    plt.title('cos')
+    plt.axis('off')
+    plt.subplot(255)
+    plt.imshow(np.sin(2 * j['angle_img'][2]))
+    plt.title('sin')
+    plt.axis('off')
 
 if __name__ == '__main__':
     # simulator_baseline()
     # jacquard_baseline()
     # beam_search_improve()
-    beam_search_optimize()
+#    beam_search_optimize()
+#     input_outputs()
     # beam_loss()
+    jacquard_vs_cornell_dataset()
     plt.show()

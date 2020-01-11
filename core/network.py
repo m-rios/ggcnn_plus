@@ -514,6 +514,26 @@ class Network:
 
         return Network(model=new_model)
 
+    def raw_predict(self, depth, subtract_mean=True):
+        """
+        Same as predict but the angles are not postprocessed. For visualization purposes only
+        """
+        assert isinstance(depth, np.ndarray)
+        assert depth.ndim in [2, 3, 4]
+        assert isinstance(subtract_mean, bool)
+
+        if depth.ndim == 2:
+            depth = depth.reshape((1,) + depth.shape + (1,))
+        elif depth.ndim == 3:
+            depth = depth.reshape(depth.shape + (1,))
+        assert depth.shape[1:3] == (self.width, self.height), 'Invalid input shape'
+
+        if subtract_mean:
+            flat_depth = depth.flatten() - depth.mean(axis=(1, 2)).repeat(depth.shape[1] * depth.shape[2])
+            depth = flat_depth.reshape(depth.shape)
+
+        return self.model.predict(depth, batch_size=24)
+
     def predict(self, depth, subtract_mean=True):
         """
         Uses model to evaluate depth image.

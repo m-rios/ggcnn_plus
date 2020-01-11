@@ -16,5 +16,6 @@ for blender_fn in blender_fns:
     bpy.ops.object.origin_set( type = 'ORIGIN_GEOMETRY' )
 
     for ob in bpy.context.scene.objects:
-        if ob.data.name != 'Plane' and ob.data.name != 'Cube':
+        print(ob.data.name)
+        if ob.data.name != 'Plane' and ob.data.name != 'Cube' and ob.data.name != 'teddy bear' and ob.data.name != 'vase':
             scales_f.write('{},{}\n'.format(obj_id, abs(ob.scale[0])))
