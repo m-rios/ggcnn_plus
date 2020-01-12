@@ -406,15 +406,18 @@ class OrthoNet:
             break
 
         eye = np.eye(3)
-        render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2], wait=False, cloud=object_cloud)
+        render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
+                     cloud=object_cloud)
         render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=True, cloud=object_cloud)
         # Prediction
         # d1 = np.sign(np.dot(camera_orientation_object, [1, 0, 0]))
         # d2 = np.sign(np.dot(camera_orientation_object, [0, 1, 0]))
 
-        (front_cloud, fidx, frotated), \
-        (side_cloud, sidx, srotated), \
-        (top_cloud, tidx, trotated) = orient_object_cloud(object_cloud, camera_position_object, camera_frame_object)
+        (front_cloud, fidx, f_rotated), \
+        (side_cloud, sidx, s_rotated), \
+        (top_cloud, tidx, t_rotated) = orient_object_cloud(object_cloud, camera_position_object, camera_frame_object)
+
+        was_rotated = [f_rotated, s_rotated, t_rotated]
 
         depths = [front_cloud.to_depth(index=fidx),
                   side_cloud.to_depth(index=sidx),
@@ -423,7 +426,13 @@ class OrthoNet:
         positions, zs, ys, widths = [], [], [], []
 
         for index, depth in enumerate(depths):
-            position, z, y, width = predictor(depth, index)
+            position, z, y, width = predictor(depth, depth.index)
+            print(z)
+            print(y)
+            if was_rotated[index]:
+                position[:2] *= -1
+                z[:2] *= -1
+                y[:2] *= -1
             render_pose(object_cloud, position, z, y, width)
 
             # Backwards transform
@@ -473,8 +482,8 @@ class OrthoNet:
         y = y / np.linalg.norm(y)
         y = np.insert(y, index, 0)
 
-        z = np.insert(np.zeros(2), index, 1).reshape((1, 3))
-        return point.reshape((1, 3)), z, y, width
+        z = np.insert(np.zeros(2), index, 1)
+        return point, z, y, width
 
     @staticmethod
     def manual_predictor(depth_img, index):
@@ -522,7 +531,7 @@ class OrthoNet:
         global start, end
         img_axes = np.delete(range(3), index)
         width = np.abs(np.linalg.norm(depth_img.to_object(end[::-1])[img_axes] - depth_img.to_object(start[::-1])[img_axes]))
-        z = np.insert(np.zeros(2), index, -1).reshape((1, 3))
+        z = np.insert(np.zeros(2), index, -1)
         # width = 0
 
         start = np.array(start)
@@ -534,7 +543,7 @@ class OrthoNet:
         y = np.insert([end[0] - start[0], end[1] - start[1]], index, 0)
         y = y / np.linalg.norm(y)
 
-        return np.reshape(point, (1, 3)), z, y, width
+        return point, z, y, width
 
 
 def render_pose(cloud, position, z, y, width, wait=False):
@@ -619,7 +628,8 @@ if __name__ == '__main__':
     import pylab as plt
     cloud = PointCloud.from_npy('../test/points.npy')
     onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/beam_search_transpose/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
-    point, orientation, angle, width = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
+    # point, orientation, angle, width = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
+    point, orientation, angle, width = onet.predict(cloud.cloud, onet.manual_predictor, roi=[-2, 1, -.15, .25, 0, 0.2])
 
     plt.pause(1e5)
     raw_input('Press ENTER to quit')
