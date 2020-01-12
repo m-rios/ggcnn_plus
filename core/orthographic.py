@@ -55,11 +55,12 @@ class Transform:
 
 
 class Depth:
-    def __init__(self, img, inverse_transform, pixel_radius, index, blur=2.):
+    def __init__(self, img, inverse_transform, pixel_radius, index, blur=2., mass_probability=None):
         self.img = img
         # Convert a pixel coordinate to a 2-dimensional world coordinate
         self.inverse_transform = inverse_transform
         self.index = index
+        self.mass_probability = mass_probability
 
         self._apply_radius(pixel_radius)
         self.fill_missing()
@@ -106,6 +107,14 @@ class Depth:
         xy = self.inverse_transform(*uv)
         d = self._invert_distance(self.img[uv[0], uv[1]])
         return np.insert(xy, self.index, d)
+
+    def entropy_score(self):
+        entropy = 0
+        for p in self.mass_probability:
+            if p == 0:
+                continue  # 0 * log(0) = 0
+            entropy = p * np.log2(p)
+        return -entropy
 
 
 class PointCloud:
@@ -205,6 +214,8 @@ class PointCloud:
         image_center = np.floor(shape / 2.)
         image_center = np.array([image_center, image_center])
 
+        mass_probability = np.zeros(shape*shape).astype(np.float)
+
         for p in cloud:
             c, r = (p[spatial_idx] / pixel_size + image_center).astype(np.int)
             if index == 0:  # -z is row and y is col
@@ -215,6 +226,9 @@ class PointCloud:
             else:  # x is col and -y is row
                 r = shape - 1 - r
             depth[r, c] = max(depth[r, c], p[index])
+            mass_probability[c + shape * r] += 1
+
+        mass_probability /= np.sum(mass_probability).astype(np.float)
 
         if index == 0:
             inverse_transform = lambda r, c: np.array([
@@ -232,7 +246,7 @@ class PointCloud:
                 (shape - 1 - r - image_center[1]) * pixel_size + cloud_center[1]
             ]).astype(np.float)
 
-        return Depth(depth, inverse_transform, pixel_radius, index, blur)
+        return Depth(depth, inverse_transform, pixel_radius, index, blur, mass_probability=mass_probability)
 
     def orthographic_projection(self):
         """
@@ -429,6 +443,7 @@ class OrthoNet:
             position, z, y, width = predictor(depth, depth.index)
             print(z)
             print(y)
+            print('Entropy: {}'.format(depth.entropy_score()))
             if was_rotated[index]:
                 position[:2] *= -1
                 z[:2] *= -1
