@@ -109,12 +109,9 @@ class Depth:
         return np.insert(xy, self.index, d)
 
     def entropy_score(self):
-        entropy = 0
-        for p in self.mass_probability:
-            if p == 0:
-                continue  # 0 * log(0) = 0
-            entropy = p * np.log2(p)
-        return -entropy
+        entropy = np.log2(self.mass_probability[self.mass_probability > 0])
+        entropy = np.multiply(entropy, self.mass_probability[self.mass_probability > 0])
+        return -np.sum(entropy)
 
 
 class PointCloud:
@@ -436,8 +433,9 @@ class OrthoNet:
         depths = [front_cloud.to_depth(index=fidx),
                   side_cloud.to_depth(index=sidx),
                   top_cloud.to_depth(index=tidx)]
-        # TODO: what if PCA gives downwards vector after RANSAC?
+
         positions, zs, ys, widths, scores = [], [], [], [], []
+        print scores
 
         render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=front_cloud)
 
@@ -490,17 +488,19 @@ class OrthoNet:
         grasp = gs[0]
         point = depth_img.to_object(grasp.center)
 
-        delta = np.array([np.cos(grasp.angle), np.sin(grasp.angle)]) * grasp.width / 2.
+        delta = np.array([np.cos(grasp.angle), np.sin(grasp.angle)]) * grasp.width
         start = np.subtract(grasp.center, delta).astype(np.int)
         end = np.add(grasp.center, delta).astype(np.int)
         img_axes = np.delete(range(3), index)
-        width = np.abs(np.linalg.norm(depth_img.to_object(end)[img_axes] - depth_img.to_object(start)[img_axes]))
+        object_start = depth_img.to_object(start)[img_axes]
+        object_end = depth_img.to_object(end)[img_axes]
+        width = np.abs(np.linalg.norm(object_end - object_start))
 
-        y = np.subtract(end, start)
+        y = np.subtract(object_end, object_start)
         y = y / np.linalg.norm(y)
         y = np.insert(y, index, 0)
 
-        z = np.insert(np.zeros(2), index, 1)
+        z = np.insert(np.zeros(2), index, -1)
         return point, z, y, width
 
     @staticmethod
