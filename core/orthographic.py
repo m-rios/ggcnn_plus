@@ -422,7 +422,7 @@ class OrthoNet:
         eye = np.eye(3)
         render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
                      cloud=object_cloud)
-        render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=True, cloud=object_cloud)
+        render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
         # Prediction
         # d1 = np.sign(np.dot(camera_orientation_object, [1, 0, 0]))
         # d2 = np.sign(np.dot(camera_orientation_object, [0, 1, 0]))
@@ -437,17 +437,19 @@ class OrthoNet:
                   side_cloud.to_depth(index=sidx),
                   top_cloud.to_depth(index=tidx)]
         # TODO: what if PCA gives downwards vector after RANSAC?
-        positions, zs, ys, widths = [], [], [], []
+        positions, zs, ys, widths, scores = [], [], [], [], []
+
+        render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=front_cloud)
 
         for index, depth in enumerate(depths):
             position, z, y, width = predictor(depth, depth.index)
-            print(z)
-            print(y)
             print('Entropy: {}'.format(depth.entropy_score()))
             if was_rotated[index]:
+                # Since z will never be rotated, we will always be rotating point and z around object z
                 position[:2] *= -1
                 z[:2] *= -1
-                y[:2] *= -1
+                # Mirror the angle. Z is common for front and left, so we can always invert that one
+                y[2] *= -1
             render_pose(object_cloud, position, z, y, width)
 
             # Backwards transform
@@ -470,8 +472,9 @@ class OrthoNet:
             zs.append(camera_orientation/np.linalg.norm(camera_orientation))
             ys.append(camera_x/np.linalg.norm(camera_x))
             widths.append(width)
+            scores.append(depth.entropy_score())
 
-        return positions, zs, ys, widths
+        return positions, zs, ys, widths, scores
 
     def network_predictor(self, depth_img, index, debug=True):
         from core.network import get_grasps_from_output
@@ -553,7 +556,12 @@ class OrthoNet:
         start[1] = 299 - start[1]
         end = np.array(end)
         end[1] = 299 - end[1]
+        # If picture is taken from y axis horizontal axis goes from right to left
+        if index == 1:
+            start[0] = 299 - start[0]
+            end[0] = 299 - end[0]
         # angle = np.arctan2(end[1] - start[1], end[0] - start[0])
+        # print('Angle {}'.format(angle))
 
         y = np.insert([end[0] - start[0], end[1] - start[1]], index, 0)
         y = y / np.linalg.norm(y)
@@ -564,11 +572,11 @@ class OrthoNet:
 def render_pose(cloud, position, z, y, width, wait=False):
     cloud = cloud.cloud
     z *= float(width)
-    # y *= width/2.
-    y *= float(width)
+    y *= width/2.
+    # y *= float(width)
     z_axis = np.linspace(position, position + z, 1e3).squeeze()
-    y_axis = np.linspace(position, position + y, 1e3).squeeze()
-    # y_axis = np.linspace(position - y, position + y, 1e3).squeeze()
+    # y_axis = np.linspace(position, position + y, 1e3).squeeze()
+    y_axis = np.linspace(position - y, position + y, 1e3).squeeze()
     blue = np.repeat([[0, 0, 1]], z_axis.shape[0], axis=0)
     green = np.repeat([[0, 1, 0]], y_axis.shape[0], axis=0)
     colors = np.concatenate((np.ones(cloud.shape), blue, green))
@@ -643,8 +651,8 @@ if __name__ == '__main__':
     import pylab as plt
     cloud = PointCloud.from_npy('../test/points.npy')
     onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/beam_search_transpose/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
-    # point, orientation, angle, width = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
-    point, orientation, angle, width = onet.predict(cloud.cloud, onet.manual_predictor, roi=[-2, 1, -.15, .25, 0, 0.2])
+    points, orientations, angles, widths, scores = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
+    # points, orientations, angles, widths, scores = onet.predict(cloud.cloud, onet.manual_predictor, roi=[-2, 1, -.15, .25, 0, 0.2])
 
     plt.pause(1e5)
     raw_input('Press ENTER to quit')
