@@ -393,8 +393,6 @@ class OrthoNet:
         camera_cloud = PointCloud(cloud)  # w.r.t camera frame
         camera_position = np.array([0., 0., 0.]).reshape((1, 3))  # Position of the camera w.r.t. camera frame
         camera_frame = np.eye(3)  # Rows are the frame axes
-        # render_pose(camera_cloud, camera_position, camera_orientation, camera_x, 1)
-        # render_frame(camera_position, camera_frame[:,0], camera_frame[:, 1], camera_frame[:, 2])
         while True:
             try:
                 plane_cloud = camera_cloud.find_plane()  # Largest plane w.r.t camera frame
@@ -402,10 +400,7 @@ class OrthoNet:
                 camera_position_plane = tf_camera_to_plane.transform(camera_position)  # Camera position w.r.t. the plane frame of reference
                 camera_frame_plane = tf_camera_to_plane.transform(camera_frame)  # Camera orientation w.r.t. the plane frame of reference
                 table_cloud = tf_camera_to_plane.transform(camera_cloud)
-                # render_pose(table_cloud, camera_position_plane, camera_orientation_plane, camera_y_plane, 1, True)
-                render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2], cloud=table_cloud)
-                # render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1],
-                #              camera_frame_plane[2], wait=True)
+                # render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2], cloud=table_cloud)
                 roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
                 object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
                 object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
@@ -417,12 +412,9 @@ class OrthoNet:
             break
 
         eye = np.eye(3)
-        render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
-                     cloud=object_cloud)
-        render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
-        # Prediction
-        # d1 = np.sign(np.dot(camera_orientation_object, [1, 0, 0]))
-        # d2 = np.sign(np.dot(camera_orientation_object, [0, 1, 0]))
+        # render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
+        #              cloud=object_cloud)
+        # render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
 
         (front_cloud, fidx, f_rotated), \
         (side_cloud, sidx, s_rotated), \
@@ -435,9 +427,6 @@ class OrthoNet:
                   top_cloud.to_depth(index=tidx)]
 
         positions, zs, ys, widths, scores = [], [], [], [], []
-        print scores
-
-        render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=front_cloud)
 
         for index, depth in enumerate(depths):
             position, z, y, width = predictor(depth, depth.index)
@@ -461,10 +450,10 @@ class OrthoNet:
             roi_com = tf_camera_to_plane.transform_inverse(np.zeros((1, 3)))
             camera_orientation -= roi_com
             camera_x -= roi_com
-            camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
-            camera_x = camera_x / np.linalg.norm(camera_x)
+            # camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
+            # camera_x = camera_x / np.linalg.norm(camera_x)
 
-            # render_pose(camera_cloud, camera_position, camera_orientation, camera_y, width)
+            render_pose(camera_cloud, camera_position, camera_orientation, camera_x, width)
 
             positions.append(camera_position)
             zs.append(camera_orientation/np.linalg.norm(camera_orientation))
@@ -488,7 +477,7 @@ class OrthoNet:
         grasp = gs[0]
         point = depth_img.to_object(grasp.center)
 
-        delta = np.array([np.cos(grasp.angle), np.sin(grasp.angle)]) * grasp.width
+        delta = np.array([-np.sin(grasp.angle), np.cos(grasp.angle)]) * grasp.width
         start = np.subtract(grasp.center, delta).astype(np.int)
         end = np.add(grasp.center, delta).astype(np.int)
         img_axes = np.delete(range(3), index)
@@ -569,10 +558,10 @@ class OrthoNet:
         return point, z, y, width
 
 
-def render_pose(cloud, position, z, y, width, wait=False):
+def render_pose(cloud, position, z_input, y_input, width, wait=False):
     cloud = cloud.cloud
-    z *= float(width)
-    y *= width/2.
+    z = z_input * float(width)
+    y = y_input * width/2.
     # y *= float(width)
     z_axis = np.linspace(position, position + z, 1e3).squeeze()
     # y_axis = np.linspace(position, position + y, 1e3).squeeze()
@@ -650,9 +639,10 @@ def render(cloud, wait=False):
 if __name__ == '__main__':
     import pylab as plt
     cloud = PointCloud.from_npy('../test/points.npy')
-    onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/beam_search_transpose/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
-    points, orientations, angles, widths, scores = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
-    # points, orientations, angles, widths, scores = onet.predict(cloud.cloud, onet.manual_predictor, roi=[-2, 1, -.15, .25, 0, 0.2])
+    # onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/beam_search_transpose/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
+    onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+    # points, orientations, angles, widths, scores = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
+    points, orientations, angles, widths, scores = onet.predict(cloud.cloud, onet.manual_predictor, roi=[-2, 1, -.15, .25, 0, 0.2])
 
     plt.pause(1e5)
     raw_input('Press ENTER to quit')
