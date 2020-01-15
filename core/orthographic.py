@@ -393,23 +393,28 @@ class OrthoNet:
         camera_cloud = PointCloud(cloud)  # w.r.t camera frame
         camera_position = np.array([0., 0., 0.]).reshape((1, 3))  # Position of the camera w.r.t. camera frame
         camera_frame = np.eye(3)  # Rows are the frame axes
-        while True:
-            try:
-                plane_cloud = camera_cloud.find_plane()  # Largest plane w.r.t camera frame
-                plane_cloud, tf_camera_to_plane = plane_cloud.pca()  # Largest plane w.r.t plane itself
-                camera_position_plane = tf_camera_to_plane.transform(camera_position)  # Camera position w.r.t. the plane frame of reference
-                camera_frame_plane = tf_camera_to_plane.transform(camera_frame)  # Camera orientation w.r.t. the plane frame of reference
-                table_cloud = tf_camera_to_plane.transform(camera_cloud)
-                # render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2], cloud=table_cloud)
-                roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
-                object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
-                object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
-                camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
-                camera_frame_object = tf_roi_to_object.transform(camera_frame_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
-            except AssertionError as e:
-                print('Caught error: {}, retrying'.format(e))
-                continue
-            break
+        # plane_inverted = False
+        # while not plane_inverted:
+        plane_cloud = camera_cloud.find_plane()  # Largest plane w.r.t camera frame
+        plane_cloud, tf_camera_to_plane = plane_cloud.pca()  # Largest plane w.r.t plane itself
+        camera_position_plane = tf_camera_to_plane.transform(camera_position)  # Camera position w.r.t. the plane frame of reference
+        camera_frame_plane = tf_camera_to_plane.transform(camera_frame)  # Camera orientation w.r.t. the plane frame of reference
+        # Check if plane z is pointing up
+        plane_inverted = np.dot(camera_frame_plane[2], np.array([0, 0, 1])) > 0
+        table_cloud = tf_camera_to_plane.transform(camera_cloud)
+        if plane_inverted:
+            print 'Plane inverted'
+            table_cloud[:, [0, 2]] *= -1
+            camera_position_plane[:, [0, 2]] *= -1
+            camera_frame_plane[:, [0, 2]] *= -1
+        render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2],
+                     cloud=table_cloud)
+        roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
+        object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
+        object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
+        camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
+        camera_frame_object = tf_roi_to_object.transform(camera_frame_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
+
 
         eye = np.eye(3)
         # render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
@@ -443,6 +448,11 @@ class OrthoNet:
             roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
             roi_orientation = tf_roi_to_object.transform_inverse(z.reshape((1, 3)), axes=[0, 1])
             roi_y = tf_roi_to_object.transform_inverse(y.reshape((1, 3)), axes=[0, 1])
+
+            if plane_inverted:
+                roi_position[:, [0, 2]] *= -1
+                roi_orientation[:, [0, 2]] *= -1
+                roi_y[:, [0, 2]] *= -1
 
             camera_position = tf_camera_to_plane.transform_inverse(roi_position)
             camera_orientation = tf_camera_to_plane.transform_inverse(roi_orientation)
