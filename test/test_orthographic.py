@@ -182,7 +182,7 @@ class TestOrthographic(TestCase):
         mean, normal = cloud.find_plane()
 
     def test_render(self):
-        pcd = np.load('points2.npy')
+        pcd = np.load('points.npy')
         cloud = PointCloud(pcd)
         cloud.render()
         cloud.render(use_pptk=False, subsample=0.01)
@@ -202,3 +202,8 @@ class TestOrthographic(TestCase):
         cloud = PointCloud(pcd)
         rotated = cloud.rotate([0, 1, 0], np.radians(45))
         rotated.render()
+
+    def test_visualize_wrt_camera(self):
+        cloud = PointCloud(np.load('points.npy'))
+        eye = np.eye(3)
+        core.orthographic.render_frame([0, 0, 0], eye[0], eye[1], eye[2], cloud=cloud)

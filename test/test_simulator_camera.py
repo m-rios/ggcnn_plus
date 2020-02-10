@@ -10,6 +10,7 @@ import h5py
 import numpy as np
 import os
 import pylab as plt
+import pptk
 
 
 class TestSimulatorCamera(TestCase):
@@ -17,13 +18,14 @@ class TestSimulatorCamera(TestCase):
         sim = Simulator(gui=False, use_egl=False)
 
         # Load random scene
-        scenes_ds = h5py.File('../data/scenes/shapenet_1.hdf5', 'r')
+        scenes_ds = h5py.File('../data/scenes/shapenetsem40_5.hdf5', 'r')
         scene = scenes_ds['scene'][np.random.randint(len(scenes_ds['scene'][:]))]
         sim.restore(scene, os.environ['MODELS_PATH'])
 
         # Get pcd
         pcd = sim.cam.point_cloud()
         self.assertTrue(pcd.shape[0] > 0)
+        pptk.viewer(pcd)
 
     def test_plane_segmentation(self):
         sim = Simulator(gui=False, use_egl=False)

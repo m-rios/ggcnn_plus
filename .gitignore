@@ -256,3 +256,10 @@ fabric.properties
 .idea/sonarlint
 
 # End of https://www.gitignore.io/api/pycharm
+/simulator/data/
+/dissertation/
+/extended_abstract/
+/models-OBJ.zip
+/notebook.py
+/dissertation/
+/extended_abstract/

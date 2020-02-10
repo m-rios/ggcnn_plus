@@ -649,6 +649,7 @@ def render(cloud, wait=False):
 if __name__ == '__main__':
     import pylab as plt
     cloud = PointCloud.from_npy('../test/points.npy')
+    # cloud = PointCloud.from_npy('../test/isolated_cloud.npy')
     # onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/beam_search_transpose/arch_C9x9x32_C5x5x32_C5x5x16_C3x3x8_C3x3x8_T3x3x8_T3x3x8_T5x5x16_T9x9x32_depth_3_model.hdf5')
     onet = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
     # points, orientations, angles, widths, scores = onet.predict(cloud.cloud, onet.network_predictor,roi=[-2, 1, -.15, .25, 0, 0.2])
