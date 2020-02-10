@@ -1,6 +1,7 @@
 from unittest import TestCase
 from simulator.simulator import Simulator
 import numpy as np
+import h5py
 
 
 class TestSimulatorCamera(TestCase):
@@ -92,10 +93,19 @@ class TestSimulatorCamera(TestCase):
         # plt.show()
 
     def test_static_gripper(self):
-        import h5py
         scene = h5py.File('../data/scenes/shapenetsem40_5.hdf5')['scene'][31]
         sim = Simulator(gui=True, use_egl=False)
         sim.restore(scene, '../data/3d_models/shapenetsem40')
         sim.add_gripper('../simulator/gripper.urdf')
         sim.load('../simulator/bin.urdf', pos=sim.bin_pos)
         sim.run(epochs=50000)
+
+    def test_move_to_pre_grasp(self):
+        pass
+
+    def test_move_along_forward_axis(self):
+        sim = Simulator(gui=True, use_egl=False)
+        scene = h5py.File('../data/scenes/shapenetsem40_5.hdf5')['scene'][45]
+        sim.restore(scene, '../data/3d_models/shapenetsem40')
+        sim.run_generate_scene()
+

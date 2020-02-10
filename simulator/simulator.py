@@ -275,6 +275,14 @@ class Simulator:
         self.cam = Camera(debug=debug)
         self.logger = None
 
+        self.x_slider = None
+        self.y_slider = None
+        self.z_slider = None
+
+        self.r_slider = None
+        self.p_slider = None
+        self.yaw_slider = None
+
     def __del__(self):
         p.disconnect()
 
@@ -483,6 +491,15 @@ class Simulator:
         #print('Result: {}'.format(result))
         return result
 
+    def evaluate_3dof_grasp(self, position, approach, orientation, width):
+        """
+        :param position: position of the grasp
+        :param approach: direction the hand will follow along its forward axis to approach the position point
+        :param orientation: rotation along the forward axis that the hand will arrive the position at.
+        :param width: distance between the plates before arriving to the grasp point
+        :return: True/False whether the grasp was successful
+        """
+
     def _remove_body(self, bId):
         del self.old_poses[bId]
         p.removeBody(bId)
@@ -684,6 +701,49 @@ class Simulator:
         else:
             if autostop:
                 print('Unstable')
+
+    def run_generate_scene(self):
+        body_id = self.bodies.next()
+
+        pos, ori = self._get_pos_and_ori(body_id)
+        eulers = p.getEulerFromQuaternion(ori)
+        sliders = [
+            p.addUserDebugParameter('x', -2, 2, pos[0]),
+            p.addUserDebugParameter('y', -2, 2, pos[1]),
+            p.addUserDebugParameter('z', -2, 2, pos[2]),
+            p.addUserDebugParameter('roll', -180, 180, np.rad2deg(eulers[0])),
+            p.addUserDebugParameter('pitch', -180, 180, np.rad2deg(eulers[1])),
+            p.addUserDebugParameter('yaw', -180, 180, np.rad2deg(eulers[2]))
+        ]
+
+        qKey = ord('q')
+        pKey = ord(' ')
+        nextKey = 65309L
+
+        simulate = False
+
+        stop = False
+
+        while True:
+            keys = p.getKeyboardEvents()
+            if qKey in keys and keys[qKey] & p.KEY_WAS_TRIGGERED:
+                stop = True
+                break
+            if nextKey in keys and keys[nextKey] & p.KEY_WAS_TRIGGERED:
+                break
+            if pKey in keys and keys[pKey] & p.KEY_WAS_TRIGGERED:
+                pos, ori = self._get_pos_and_ori(body_id)
+                simulate = not simulate
+
+            self.step()
+            if not simulate:
+                targets_values = [p.readUserDebugParameter(s_id) for s_id in sliders]
+                p.resetBasePositionAndOrientation(body_id, targets_values[:3], p.getQuaternionFromEuler(np.deg2rad(targets_values[3:6])))
+
+        p.removeAllUserDebugItems()
+        for slider in sliders:
+            p.removeUserDebugItem(slider)
+        return stop
 
     def debug_run(self):
         p.removeAllUserDebugItems()
