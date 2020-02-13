@@ -120,7 +120,6 @@ class TestSimulatorCamera(TestCase):
         sim.teleport_to_pose([0, 0, 1], gripper_rot.as_euler('XYZ'), width)
         sim.run(epochs=10000)
 
-
     def test_add_debug_pose(self):
         sim = Simulator(gui=True, use_egl=False)
         scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
@@ -131,8 +130,19 @@ class TestSimulatorCamera(TestCase):
         sim.add_debug_pose([0, 0, 1], cam_rot[:,2], cam_rot[:,0], .5)
         sim.run()
 
-    def test_move_to_pre_grasp(self):
-        pass
+    def test_teleport_to_pre_grasp(self):
+        sim = Simulator(gui=True, use_egl=False)
+        scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
+        sim.restore(scene, '../data/3d_models/shapenetsem40')
+        sim.add_gripper('../simulator/gripper.urdf')
+        p = [-.032, -.032, .1]
+        z = [1, 1, 0]
+        x = [1, -1, 0]
+        w = .1
+        sim.add_debug_pose(p, z, x, w)
+        sim.run(epochs=100)
+        sim.teleport_to_pre_grasp(p, z, x, w)
+        sim.run()
 
     def test_move_along_forward_axis(self):
         sim = Simulator(gui=True, use_egl=False)

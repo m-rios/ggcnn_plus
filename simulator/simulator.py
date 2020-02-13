@@ -646,6 +646,16 @@ class Simulator:
         if self.debug:
             self.cam.snap()
 
+    def teleport_to_pre_grasp(self, position, z, x, width):
+        z = np.array(z)
+        z = z / np.linalg.norm(z)
+        x = np.array(x)
+        x = x / np.linalg.norm(x)
+        y = np.cross(z, x)
+        target_pos = position - z * 0.2
+        target_ori = R.from_dcm(np.column_stack((x, y, z))) * R.from_euler('X', np.pi)
+        self.teleport_to_pose(target_pos, target_ori.as_euler('XYZ'), width)
+
     def teleport_to_pose(self, position, orientation, width):
         """
         Instantaneously moves the gripper to the given configuration without making use of the physics engine. Useful
