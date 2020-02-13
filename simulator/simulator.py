@@ -665,6 +665,11 @@ class Simulator:
         # Close gripper
         self.close_gripper()
 
+    def move_to_post_grasp(self):
+        target_pos = map(lambda joint: joint[0], p.getJointStates(self.gid, range(6)))
+        target_pos[2] += self.pre_grasp_distance
+        self.move_gripper_to(target_pos)
+
     def teleport_to_pre_grasp(self, position, z, x, width):
         z = np.array(z)
         z = z / np.linalg.norm(z)

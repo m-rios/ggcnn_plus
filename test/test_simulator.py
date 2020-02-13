@@ -158,4 +158,5 @@ class TestSimulatorCamera(TestCase):
         sim.teleport_to_pre_grasp(p, z, x, w)
 
         sim.grasp_along(z)
+        sim.move_to_post_grasp()
 
