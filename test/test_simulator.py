@@ -2,6 +2,7 @@ from unittest import TestCase
 from simulator.simulator import Simulator
 import numpy as np
 import h5py
+from scipy.spatial.transform import Rotation as R
 
 
 class TestSimulatorCamera(TestCase):
@@ -100,12 +101,45 @@ class TestSimulatorCamera(TestCase):
         sim.load('../simulator/bin.urdf', pos=sim.bin_pos)
         sim.run(epochs=50000)
 
+    def test_teleport_to_pose(self):
+        sim = Simulator(gui=True, use_egl=False, debug=True)
+        sim.add_gripper('../simulator/gripper.urdf')
+
+        sim.run_debug_teleport()
+
+    def test_teleport_rotation_from_axis(self):
+        sim = Simulator(gui=True, use_egl=False)
+        sim.add_gripper('../simulator/gripper.urdf')
+        width = .2
+        angles = np.random.rand(3) * 2 * np.pi - np.pi
+        target_rot = R.from_euler('ZXZ', angles)
+        debug_rot = target_rot.as_dcm()
+        sim.add_debug_pose([0, 0, 1], debug_rot[:, 2], debug_rot[:, 0], width)
+        sim.run(epochs=100)
+        gripper_rot = target_rot * R.from_euler('X', np.pi)
+        sim.teleport_to_pose([0, 0, 1], gripper_rot.as_euler('XYZ'), width)
+        sim.run(epochs=10000)
+
+
+    def test_add_debug_pose(self):
+        sim = Simulator(gui=True, use_egl=False)
+        scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
+        sim.restore(scene, '../data/3d_models/shapenetsem40')
+
+        cam_rot = R.from_euler('ZXZ', [0, 90, -30], degrees=True).as_dcm()
+        print cam_rot
+        sim.add_debug_pose([0, 0, 1], cam_rot[:,2], cam_rot[:,0], .5)
+        sim.run()
+
     def test_move_to_pre_grasp(self):
         pass
 
     def test_move_along_forward_axis(self):
         sim = Simulator(gui=True, use_egl=False)
-        scene = h5py.File('../data/scenes/shapenetsem40_5.hdf5')['scene'][45]
+        scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
         sim.restore(scene, '../data/3d_models/shapenetsem40')
-        sim.run_generate_scene()
+
+        sim.add_gripper('../simulator/gripper.urdf')
+
+        sim.run()
 

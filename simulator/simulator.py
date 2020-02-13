@@ -646,6 +646,29 @@ class Simulator:
         if self.debug:
             self.cam.snap()
 
+    def teleport_to_pose(self, position, orientation, width):
+        """
+        Instantaneously moves the gripper to the given configuration without making use of the physics engine. Useful
+        for quickly reaching pre-grasps
+        :param position: vec3
+        :param orientation: vec3 intrinsic eulers XYZ
+        :param width: float
+        :return:
+        """
+        p.resetJointState(self.gid, 0, position[0])
+        p.resetJointState(self.gid, 1, position[1])
+        p.resetJointState(self.gid, 2, position[2])
+
+        p.resetJointState(self.gid, 3, orientation[0])
+        p.resetJointState(self.gid, 4, orientation[1])
+        p.resetJointState(self.gid, 5, orientation[2])
+
+        width = 0.3 - width
+        width /= 2
+
+        p.resetJointState(self.gid, 6, width)
+        p.resetJointState(self.gid, 7, width)
+
     def drawAABB(self, bb, parent=-1, color=black):
         bb = np.array(bb)
         if parent != -1:
@@ -701,6 +724,23 @@ class Simulator:
         else:
             if autostop:
                 print('Unstable')
+
+    def run_debug_teleport(self):
+        states = map(lambda joint: joint[0], p.getJointStates(self.gid, range(6)))
+
+        sliders = [
+            p.addUserDebugParameter('x', -1, 1, states[0]),
+            p.addUserDebugParameter('y', -1, 1, states[1]),
+            p.addUserDebugParameter('z', -1, 1, states[2]),
+            p.addUserDebugParameter('roll', -180, 180, np.rad2deg(states[3])),
+            p.addUserDebugParameter('pitch', -180, 180, np.rad2deg(states[4])),
+            p.addUserDebugParameter('yaw', -180, 180, np.rad2deg(states[5])),
+            p.addUserDebugParameter('width', 0, 0.3, 0.3)
+        ]
+
+        while True:
+            targets_values = [p.readUserDebugParameter(s_id) for s_id in sliders]
+            self.teleport_to_pose(targets_values[:3], np.deg2rad(targets_values[3:6]), targets_values[6])
 
     def run_generate_scene(self):
         body_id = self.bodies.next()
@@ -796,3 +836,14 @@ class Simulator:
 
     def disconnect(self):
         p.disconnect()
+
+    def add_debug_pose(self, position, z, x, width):
+        position = np.array(position)
+        z = np.array(z)
+        z = z / np.linalg.norm(z)
+        x = np.array(x)
+        x = x / np.linalg.norm(x) * width / 2.
+        p.addUserDebugLine(position, position + z, [0, 0, 1])
+        p.addUserDebugLine(position, position + x, [1, 0, 0])
+        p.addUserDebugLine(position, position - x, [1, 0, 0])
+

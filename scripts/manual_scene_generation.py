@@ -53,7 +53,7 @@ if __name__ == '__main__':
                 scale = sim.read_scale(obj_fn.split('/')[-1].replace('.obj', ''), args.models)
             else:
                 scale = 1
-            sim.load(obj_fn, ori=np.random.rand(3) * 2 * np.pi, scale=scale)
+            sim.load(obj_fn, scale=scale)
             stop = sim.run_generate_scene()
 
             obj_name = obj_fn.split('/')[-1].split('.')[-2]
