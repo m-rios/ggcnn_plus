@@ -242,7 +242,8 @@ class Camera(object):
 class Simulator:
 
     def __init__(self, gui=False, use_egl=True, timeout=2, timestep=1e-3, debug=False,
-            epochs=10000, stop_th=1e-4, g=-10, bin_pos=[1.5, 1.5, 0.01], visual_model=False):
+                 epochs=10000, stop_th=1e-4, g=-10, bin_pos=[1.5, 1.5, 0.01], visual_model=False,
+                 pre_grasp_distance=0.2):
         self.gui = gui
         self.debug = debug
         self.epochs = epochs
@@ -275,13 +276,7 @@ class Simulator:
         self.cam = Camera(debug=debug)
         self.logger = None
 
-        self.x_slider = None
-        self.y_slider = None
-        self.z_slider = None
-
-        self.r_slider = None
-        self.p_slider = None
-        self.yaw_slider = None
+        self.pre_grasp_distance = pre_grasp_distance
 
     def __del__(self):
         p.disconnect()
@@ -646,13 +641,37 @@ class Simulator:
         if self.debug:
             self.cam.snap()
 
+    def grasp_along(self, axis, pos_tol=0.01, linvel=0.5, force=1000):
+        axis = np.array(axis)
+        axis = axis / np.linalg.norm(axis)
+        initial_pos = map(lambda joint: joint[0], p.getJointStates(self.gid, range(3)))
+        target_pos = initial_pos + axis * (self.pre_grasp_distance - 0.005)
+
+        timeout = (self.pre_grasp_distance + 0.01) / linvel
+
+        # Set target position
+        for joint in range(3):
+            p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
+                                    targetPosition=target_pos[joint], targetVelocity=0,
+                                    force=force, maxVelocity=linvel, positionGain=0.3, velocityGain=1)
+
+        # Simulation loop
+        for _ in range(int(timeout / self.timestep)):
+            current_pos = map(lambda joint: joint[0], p.getJointStates(self.gid, range(3)))
+            if np.linalg.norm(target_pos - current_pos) < pos_tol:
+                break
+            self.step()
+
+        # Close gripper
+        self.close_gripper()
+
     def teleport_to_pre_grasp(self, position, z, x, width):
         z = np.array(z)
         z = z / np.linalg.norm(z)
         x = np.array(x)
         x = x / np.linalg.norm(x)
         y = np.cross(z, x)
-        target_pos = position - z * 0.2
+        target_pos = position - z * self.pre_grasp_distance
         target_ori = R.from_dcm(np.column_stack((x, y, z))) * R.from_euler('X', np.pi)
         self.teleport_to_pose(target_pos, target_ori.as_euler('XYZ'), width)
 

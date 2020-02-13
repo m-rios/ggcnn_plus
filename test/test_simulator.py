@@ -148,8 +148,14 @@ class TestSimulatorCamera(TestCase):
         sim = Simulator(gui=True, use_egl=False)
         scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
         sim.restore(scene, '../data/3d_models/shapenetsem40')
-
         sim.add_gripper('../simulator/gripper.urdf')
+        p = [-.032, -.032, .1]
+        z = [1, 1, 0]
+        x = [1, -1, 0]
+        w = .2
+        sim.add_debug_pose(p, z, x, w)
+        sim.run(epochs=100)
+        sim.teleport_to_pre_grasp(p, z, x, w)
 
-        sim.run()
+        sim.grasp_along(z)
 
