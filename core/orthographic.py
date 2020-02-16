@@ -379,7 +379,7 @@ class OrthoNet:
             from core.network import Network
             self.network = Network(model_fn=model_fn)
 
-    def predict(self, cloud, predictor, roi=None):
+    def predict(self, cloud, predictor, roi=None, debug=True):
         """
         Yields a point and orientation for a grasp in the point cloud
         :param cloud: Point cloud (ndarray of shape N, 3)
@@ -393,22 +393,22 @@ class OrthoNet:
         camera_cloud = PointCloud(cloud)  # w.r.t camera frame
         camera_position = np.array([0., 0., 0.]).reshape((1, 3))  # Position of the camera w.r.t. camera frame
         camera_frame = np.eye(3)  # Rows are the frame axes
-        # plane_inverted = False
-        # while not plane_inverted:
+
         plane_cloud = camera_cloud.find_plane()  # Largest plane w.r.t camera frame
         plane_cloud, tf_camera_to_plane = plane_cloud.pca()  # Largest plane w.r.t plane itself
         camera_position_plane = tf_camera_to_plane.transform(camera_position)  # Camera position w.r.t. the plane frame of reference
         camera_frame_plane = tf_camera_to_plane.transform(camera_frame)  # Camera orientation w.r.t. the plane frame of reference
         # Check if plane z is pointing up
-        plane_inverted = np.dot(camera_frame_plane[2], np.array([0, 0, 1])) > 0
+        plane_inverted = np.dot(camera_frame_plane[2] - camera_position_plane[0], np.array([0, 0, 1])) > 0
         table_cloud = tf_camera_to_plane.transform(camera_cloud)
         if plane_inverted:
             print 'Plane inverted'
             table_cloud[:, [0, 2]] *= -1
             camera_position_plane[:, [0, 2]] *= -1
             camera_frame_plane[:, [0, 2]] *= -1
-        render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2],
-                     cloud=table_cloud)
+        if debug:
+            render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2],
+                         cloud=table_cloud)
         roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
         object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
         object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
@@ -416,14 +416,16 @@ class OrthoNet:
         camera_frame_object = tf_roi_to_object.transform(camera_frame_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
 
 
-        eye = np.eye(3)
+        # eye = np.eye(3)
         # render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
         #              cloud=object_cloud)
         # render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
 
         (front_cloud, fidx, f_rotated), \
-        (side_cloud, sidx, s_rotated), \
-        (top_cloud, tidx, t_rotated) = orient_object_cloud(object_cloud, camera_position_object, camera_frame_object)
+            (side_cloud, sidx, s_rotated), \
+            (top_cloud, tidx, t_rotated) = orient_object_cloud(object_cloud,
+                                                               camera_position_object,
+                                                               camera_frame_object)
 
         was_rotated = [f_rotated, s_rotated, t_rotated]
 
@@ -434,7 +436,7 @@ class OrthoNet:
         positions, zs, ys, widths, scores = [], [], [], [], []
 
         for index, depth in enumerate(depths):
-            position, z, y, width = predictor(depth, depth.index)
+            position, z, y, width = predictor(depth, depth.index, debug=debug)
             print('Entropy: {}'.format(depth.entropy_score()))
             if was_rotated[index]:
                 # Since z will never be rotated, we will always be rotating point and z around object z
@@ -442,7 +444,8 @@ class OrthoNet:
                 z[:2] *= -1
                 # Mirror the angle. Z is common for front and left, so we can always invert that one
                 y[2] *= -1
-            render_pose(object_cloud, position, z, y, width)
+            if debug:
+                render_pose(object_cloud, position, z, y, width)
 
             # Backwards transform
             roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
@@ -462,8 +465,8 @@ class OrthoNet:
             camera_x -= roi_com
             # camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
             # camera_x = camera_x / np.linalg.norm(camera_x)
-
-            render_pose(camera_cloud, camera_position, camera_orientation, camera_x, width)
+            if debug:
+                render_pose(camera_cloud, camera_position, camera_orientation, camera_x, width)
 
             positions.append(camera_position)
             zs.append(camera_orientation/np.linalg.norm(camera_orientation))
@@ -503,7 +506,7 @@ class OrthoNet:
         return point, z, y, width
 
     @staticmethod
-    def manual_predictor(depth_img, index):
+    def manual_predictor(depth_img, index, debug=None):
         global last_lmb_event
         last_lmb_event = cv2.EVENT_LBUTTONUP
 

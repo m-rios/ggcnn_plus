@@ -7,35 +7,42 @@ import numpy as np
 import core.orthographic as orthographic
 
 
+def transform_camera_to_world(cloud, camera):
+    R = get_camera_frame(camera)
+    t = np.array(camera.pos)[:, np.newaxis]
+    return PointCloud((R.dot(cloud.cloud.T) + t).T)
+
+
 def transform_world_to_camera(cloud, camera):
+    R = get_camera_frame(camera).T
+    t = R.dot(-np.array(camera.pos))[:, np.newaxis]
+    return PointCloud((R.dot(cloud.cloud.T) + t).T)
+
+
+def get_camera_frame(camera):
     """
-    Rotates a cloud wrt world so that it is wrt camera
+    Computes the camera rotation matrix w.r.t world coordinates from a given camera instance
+    :param camera: Sim camera instance
+    :return: Transformation matrix representing the position and orientation of the camera
     """
+
     cW = np.array(camera.pos)  # Camera position wrt world
     tW = np.array(camera.target)  # Camera target wrt world
 
     # Basis of camera frame wrt world
     zW = tW - cW
     zW /= np.linalg.norm(zW)
-    xW = np.cross(zW, np.array([0, 0, 1]))
+    if np.linalg.norm(zW.flatten()[:2]) < 0.001:
+        # If z is almost vertical, x is aligned with world's x
+        xW = np.array([1, 0, 0])
+    else:
+        # Otherwise x is in the XY plane and orthogonal to z
+        xW = np.array([zW[1], -zW[0], 0])
+        xW = xW / np.linalg.norm(xW)
+    # Right handed frame, y is computed from the other known axes
     yW = np.cross(zW, xW)
 
-    # # End points of the basis (for debugging purposes)
-    # xeW = cW + xW
-    # yeW = cW + yW
-    # zeW = cW + zW
-    # orthographic.render_frame(cW, xeW, yeW, zeW, cloud=cloud)
-
-    Rcw = np.column_stack((xW, yW, zW))  # Rotation from camera to world
-    Rwc = Rcw.T  # Rotation from world to camera
-
-    rotated_cloud = Rwc.dot(cloud.cloud.T)
-    transformed_cloud = PointCloud((rotated_cloud - Rwc.dot(cW[:, np.newaxis])).T)
-
-    # eye = np.eye(3)
-    # orthographic.render_frame([0, 0, 0], eye[0], eye[1], eye[2], cloud=transformed_cloud)
-
-    return transformed_cloud
+    return np.column_stack((xW, yW, zW))
 
 
 if __name__ == '__main__':

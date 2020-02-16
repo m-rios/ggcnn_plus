@@ -671,6 +671,7 @@ class Simulator:
         self.move_gripper_to(target_pos)
 
     def teleport_to_pre_grasp(self, position, z, x, width):
+        print 'Teleporting to p: {}, z: {}, x: {}, w: {}'.format(position, z, x, width)
         z = np.array(z)
         z = z / np.linalg.norm(z)
         x = np.array(x)

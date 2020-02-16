@@ -3,6 +3,9 @@ from simulator.simulator import Simulator
 import numpy as np
 import h5py
 from scipy.spatial.transform import Rotation as R
+import core.orthographic as orthographic
+from core.orthographic import OrthoNet, PointCloud
+from core.evaluate_orthographic_pipeline import transform_world_to_camera
 
 
 class TestSimulatorCamera(TestCase):
@@ -160,3 +163,33 @@ class TestSimulatorCamera(TestCase):
         sim.grasp_along(z)
         sim.move_to_post_grasp()
 
+    def test_orthographic_pipeline(self):
+        sim = Simulator(gui=True, use_egl=False)
+        scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
+        sim.restore(scene, '../data/3d_models/shapenetsem40')
+        sim.cam.pos = [0, 0, 1.5]
+        sim.cam.width = 400
+        sim.cam.height = 400
+
+        cloud = PointCloud(sim.cam.point_cloud())
+
+        cloud = transform_world_to_camera(cloud, sim.cam)
+
+        net = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+
+        points, orientations, angles, widths, scores = net.predict(cloud.cloud, net.network_predictor,
+                                                                   roi=[-1., 1., -1., 1, -0.01, 1.],
+                                                                   debug=False)
+
+        best_idx = np.argmax(scores)
+
+        point = points[best_idx].flatten()
+        z = orientations[best_idx].flatten()
+        x = angles[best_idx].flatten()
+        width = widths[best_idx]
+
+        sim.add_gripper('../simulator/gripper.urdf')
+        sim.teleport_to_pre_grasp(point, z, x, width)
+        sim.grasp_along(z)
+        sim.move_to_post_grasp()
+        sim.run(1000)

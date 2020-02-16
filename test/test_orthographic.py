@@ -207,3 +207,6 @@ class TestOrthographic(TestCase):
         cloud = PointCloud(np.load('points.npy'))
         eye = np.eye(3)
         core.orthographic.render_frame([0, 0, 0], eye[0], eye[1], eye[2], cloud=cloud)
+
+    def test_collision_avoidance(self):
+        pass
