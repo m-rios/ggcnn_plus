@@ -10,13 +10,13 @@ import core.orthographic as orthographic
 def transform_camera_to_world(cloud, camera):
     R = get_camera_frame(camera)
     t = np.array(camera.pos)[:, np.newaxis]
-    return PointCloud((R.dot(cloud.cloud.T) + t).T)
+    return (R.dot(cloud.T) + t).T
 
 
 def transform_world_to_camera(cloud, camera):
     R = get_camera_frame(camera).T
     t = R.dot(-np.array(camera.pos))[:, np.newaxis]
-    return PointCloud((R.dot(cloud.cloud.T) + t).T)
+    return (R.dot(cloud.T) + t).T
 
 
 def get_camera_frame(camera):
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     cloud = PointCloud(sim.cam.point_cloud())
     print 'cloud was generated'
 
-    cloud = transform_world_to_camera(cloud, sim.cam)
+    cloud = PointCloud(transform_world_to_camera(cloud.cloud, sim.cam))
 
     eye = np.eye(3)
     orthographic.render_frame([0, 0, 0], eye[0], eye[1], eye[2], cloud=cloud)
