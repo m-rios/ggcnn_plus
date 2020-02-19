@@ -86,7 +86,7 @@ class TestEvaluateOrthographicPipeline(TestCase):
         orthographic.render_pose(PointCloud(recloud), p, z, x, w)
 
 
-    def test_orthographic_pipeline(self):
+    def test_top_grasp(self):
         sim = Simulator(gui=True, use_egl=False)
         scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
         sim.restore(scene, '../data/3d_models/shapenetsem40')
@@ -100,9 +100,10 @@ class TestEvaluateOrthographicPipeline(TestCase):
 
         net = orthographic.OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
 
-        ps, zs, xs, ws, scores = net.predict(cloud, net.manual_predictor, debug=False)
+        ps, zs, xs, ws, scores = net.predict(cloud, net.manual_predictor, debug=False, predict_best_only=True)
 
         best_idx = np.argmax(scores)
+        print best_idx, ps, scores
 
         p = ortho_pipeline.transform_camera_to_world(ps[best_idx], sim.cam)
         R = ortho_pipeline.get_camera_frame(sim.cam)
@@ -116,3 +117,6 @@ class TestEvaluateOrthographicPipeline(TestCase):
         sim.grasp_along(z)
         sim.move_to_post_grasp()
         sim.run(1000)
+
+    def test_obstacle_avoidance(self):
+        pass

@@ -379,7 +379,7 @@ class OrthoNet:
             from core.network import Network
             self.network = Network(model_fn=model_fn)
 
-    def predict(self, cloud, predictor, roi=None, debug=True):
+    def predict(self, cloud, predictor, roi=None, debug=True, predict_best_only=False):
         """
         Yields a point and orientation for a grasp in the point cloud
         :param cloud: Point cloud (ndarray of shape N, 3)
@@ -434,6 +434,11 @@ class OrthoNet:
                   top_cloud.to_depth(index=tidx)]
 
         positions, zs, ys, widths, scores = [], [], [], [], []
+
+        if predict_best_only:
+            s = [d.entropy_score() for d in depths]
+            best_idx = np.argmax(s)
+            depths = [depths[best_idx]]
 
         for index, depth in enumerate(depths):
             position, z, y, width = predictor(depth, depth.index, debug=debug)
