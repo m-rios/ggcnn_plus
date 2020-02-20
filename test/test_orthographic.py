@@ -2,7 +2,7 @@ from unittest import TestCase
 from mpl_toolkits.mplot3d import Axes3D
 from simulator.simulator import Simulator
 from utils.ransac import Plane
-from core.orthographic import PointCloud
+from core.orthographic import PointCloud, Depth
 
 import pylab as plt
 import numpy as np
@@ -209,4 +209,15 @@ class TestOrthographic(TestCase):
         core.orthographic.render_frame([0, 0, 0], eye[0], eye[1], eye[2], cloud=cloud)
 
     def test_collision_avoidance(self):
-        pass
+        cloud = np.load('points.npy')
+        net = core.orthographic.OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        net.predict(cloud, net.network_predictor, predict_best_only=True, n_attempts=3, debug=True, roi=[-2, 1, -.15, .25, 0, 0.2])
+
+    def test_bottom_bound(self):
+        mass = np.pad(np.eye(10), 1, 'constant', constant_values=[0]).flatten()
+        img = np.eye(10)
+        img[img == 0] = - np.inf
+        img = np.pad(img, 1, 'constant', constant_values=[-np.inf])
+        d = Depth(img, inverse_transform=lambda x, y: None, pixel_radius=1, index=0, mass_probability=mass)
+        print d.bottom_bound()
+        assert np.all(d.bottom_bound() == [10, 10])

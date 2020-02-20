@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import RANSACRegressor
 from skimage.filters import gaussian
 from scipy.spatial.transform import Rotation as R
-
+import pylab as plt
 
 class Transform:
     def __init__(self, pca):
@@ -112,6 +112,15 @@ class Depth:
         entropy = np.log2(self.mass_probability[self.mass_probability > 0])
         entropy = np.multiply(entropy, self.mass_probability[self.mass_probability > 0])
         return -np.sum(entropy)
+
+    def bottom_bound(self):
+        """
+        Returns the index of the lowest pixel that was not missing (i.e. that has a mass probability > 0). Useful for
+        finding the height of the ground for top and side views
+        :return: [row_idx, col_idx]
+        """
+        shape = np.sqrt(self.mass_probability.size).astype(np.int)
+        return np.array(zip(*np.unravel_index(np.max(np.argwhere(self.mass_probability), axis=0), [shape] * 2))[0])
 
 
 class PointCloud:
@@ -379,7 +388,7 @@ class OrthoNet:
             from core.network import Network
             self.network = Network(model_fn=model_fn)
 
-    def predict(self, cloud, predictor, roi=None, debug=True, predict_best_only=False):
+    def predict(self, cloud, predictor, roi=None, debug=True, predict_best_only=False, n_attempts=1):
         """
         Yields a point and orientation for a grasp in the point cloud
         :param cloud: Point cloud (ndarray of shape N, 3)
@@ -441,7 +450,10 @@ class OrthoNet:
             depths = [depths[best_idx]]
 
         for index, depth in enumerate(depths):
-            position, z, y, width = predictor(depth, depth.index, debug=debug)
+            # Do multiple attempts only for front and side views
+            attempts = (index in [0, 1] and n_attempts) or 1
+            print 'attempts', attempts
+            position, z, y, width = predictor(depth, depth.index, debug=debug, n_attempts=attempts)
             print('Entropy: {}'.format(depth.entropy_score()))
             if was_rotated[index]:
                 # Since z will never be rotated, we will always be rotating point and z around object z
@@ -481,37 +493,45 @@ class OrthoNet:
 
         return positions, zs, ys, widths, scores
 
-    def network_predictor(self, depth_img, index, debug=True):
+    def network_predictor(self, depth_img, index, debug=True, n_attempts=1):
         from core.network import get_grasps_from_output
         positions, angles, widths = self.network.predict(depth_img.img)
-        gs = get_grasps_from_output(positions, angles, widths)
+        gs = get_grasps_from_output(positions, angles, widths, n_grasps=n_attempts)
         if debug:
             from core.network import get_output_plot
-            get_output_plot(depth_img.img, positions, angles, widths)
+            get_output_plot(depth_img.img, positions, angles, widths, no_grasps=n_attempts)
             plt.ion()
             plt.show()
             plt.pause(.1)
         assert len(gs) > 0
-        grasp = gs[0]
-        point = depth_img.to_object(grasp.center)
 
-        delta = np.array([-np.sin(grasp.angle), np.cos(grasp.angle)]) * grasp.width
-        start = np.subtract(grasp.center, delta).astype(np.int)
-        end = np.add(grasp.center, delta).astype(np.int)
-        img_axes = np.delete(range(3), index)
-        object_start = depth_img.to_object(start)[img_axes]
-        object_end = depth_img.to_object(end)[img_axes]
-        width = np.abs(np.linalg.norm(object_end - object_start))
+        for g_idx in range(len(gs)):
+            grasp = gs[g_idx]
+            point = depth_img.to_object(grasp.center)
 
-        y = np.subtract(object_end, object_start)
-        y = y / np.linalg.norm(y)
-        y = np.insert(y, index, 0)
+            delta = np.array([-np.sin(grasp.angle), np.cos(grasp.angle)]) * grasp.width
+            start = np.subtract(grasp.center, delta).astype(np.int)
+            end = np.add(grasp.center, delta).astype(np.int)
+            img_axes = np.delete(range(3), index)
+            object_start = depth_img.to_object(start)[img_axes]
+            object_end = depth_img.to_object(end)[img_axes]
+            width = np.abs(np.linalg.norm(object_end - object_start))
 
-        z = np.insert(np.zeros(2), index, -1)
+            y = np.subtract(object_end, object_start)
+            y = y / np.linalg.norm(y)
+            y = np.insert(y, index, 0)
+
+            z = np.insert(np.zeros(2), index, -1)
+
+            # Exit if the current solution has enough clearance from the ground
+            if n_attempts > 1 and np.insert(object_end, index, 0)[2] > 0:
+                print 'Found collision free grasp at attempt', g_idx + 1, 'out of', n_attempts
+                break
+
         return point, z, y, width
 
     @staticmethod
-    def manual_predictor(depth_img, index, debug=None):
+    def manual_predictor(depth_img, index, debug=None, n_attempts=1):
         global last_lmb_event
         last_lmb_event = cv2.EVENT_LBUTTONUP
 

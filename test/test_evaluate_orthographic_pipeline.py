@@ -85,7 +85,6 @@ class TestEvaluateOrthographicPipeline(TestCase):
         recloud = ortho_pipeline.transform_camera_to_world(cloud, sim.cam)
         orthographic.render_pose(PointCloud(recloud), p, z, x, w)
 
-
     def test_top_grasp(self):
         sim = Simulator(gui=True, use_egl=False)
         scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
@@ -100,7 +99,7 @@ class TestEvaluateOrthographicPipeline(TestCase):
 
         net = orthographic.OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
 
-        ps, zs, xs, ws, scores = net.predict(cloud, net.manual_predictor, debug=False, predict_best_only=True)
+        ps, zs, xs, ws, scores = net.predict(cloud, net.network_predictor, debug=True, predict_best_only=True)
 
         best_idx = np.argmax(scores)
         print best_idx, ps, scores
@@ -119,4 +118,34 @@ class TestEvaluateOrthographicPipeline(TestCase):
         sim.run(1000)
 
     def test_obstacle_avoidance(self):
-        pass
+        sim = Simulator(gui=False, use_egl=False)
+        scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
+        sim.restore(scene, '../data/3d_models/shapenetsem40')
+        sim.cam.pos = [0, 0, 1.5]
+        sim.cam.width = 100
+        sim.cam.height = 100
+
+        cloud = sim.cam.point_cloud()
+
+        cloud = ortho_pipeline.transform_world_to_camera(cloud, sim.cam)
+
+        net = orthographic.OrthoNet(
+            model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+
+        ps, zs, xs, ws, scores = net.predict(cloud, net.network_predictor, debug=True, predict_best_only=True, n_attempts=5)
+
+        best_idx = np.argmax(scores)
+        print best_idx, ps, scores
+
+        p = ortho_pipeline.transform_camera_to_world(ps[best_idx], sim.cam)
+        R = ortho_pipeline.get_camera_frame(sim.cam)
+        z = R.dot(zs[best_idx].T).T
+        x = R.dot(xs[best_idx].T).T
+        w = ws[best_idx]
+
+        sim.add_gripper('../simulator/gripper.urdf')
+        sim.add_debug_pose(p, z, x, w)
+        sim.teleport_to_pre_grasp(p, z, x, w)
+        sim.grasp_along(z)
+        sim.move_to_post_grasp()
+        sim.run(1000)

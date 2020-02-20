@@ -2,7 +2,6 @@ import os
 import glob
 import datetime
 import numpy as np
-import pylab as plt
 import core.network as network
 from core.network import Network
 from skimage import io
