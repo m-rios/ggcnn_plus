@@ -74,7 +74,7 @@ class OpenGLLogger(object):
 class Camera(object):
 
     def __init__(self, width=300, height=300, fov=40, pos=[0, 0, 1.5],
-            target=np.zeros(3,),far=5, near=0.1, up=[0., 1., 0],  debug=False):
+            target=np.zeros(3,),far=5, near=0.1, up=[0., 1., 0], debug=False):
         self._width = width
         self._height = height
         self._target = target
@@ -134,6 +134,12 @@ class Camera(object):
         v = np.array(self._view).reshape(4,4).T
         pr = np.array(self._projection).reshape(4,4).T
         self._reproject = np.linalg.inv(np.dot(pr, v))
+        self._reset_debug_visualizer_camera()
+
+    def _reset_debug_visualizer_camera(self):
+        distance = np.linalg.norm(np.array(self.pos) - np.array(self.target))
+        pitch = - np.rad2deg(np.arctan2(self.pos[2], self.pos[1])) + 0.001
+        p.resetDebugVisualizerCamera(distance, 180, pitch, self.target)
 
     @property
     def pos(self):
@@ -256,6 +262,7 @@ class Simulator:
 
         if gui:
             self.client = p.connect(p.GUI)
+            p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         else:
             self.client = p.connect(p.DIRECT)
             if use_egl:
@@ -670,6 +677,29 @@ class Simulator:
         target_pos[2] += self.pre_grasp_distance
         self.move_gripper_to(target_pos)
 
+    def move_to_drop_off(self):
+        if not self.bin:
+            self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
+
+        dropoff = self.bin_pos + map(lambda joint: joint[0], p.getJointStates(self.gid, range(3, 6)))
+        dropoff[2] += 0.75
+
+        # Take offset between object's COM and gripper to compute postgrasp
+        bid = self.bodies.next()
+        gripper_pos = np.array(p.getLinkState(self.gid, 5)[0])
+        object_pos = p.getBasePositionAndOrientation(bid)[0]
+        offset = gripper_pos[:2] - object_pos[:2]
+        dropoff[:2] += offset
+
+        self.move_gripper_to(dropoff)
+        self.run(epochs=int(0.5 / self.timestep))  # Let inertia die at dropoff point. This prevents object shooting out
+        self.open_gripper()
+        self.run(epochs=int(1. / self.timestep))  # Let object fall
+
+        final_pos, _ = p.getBasePositionAndOrientation(bid)
+        result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 0.7
+        return result
+
     def teleport_to_pre_grasp(self, position, z, x, width):
         print 'Teleporting to p: {}, z: {}, x: {}, w: {}'.format(position, z, x, width)
         position = np.array(position).flatten()
@@ -880,6 +910,5 @@ class Simulator:
         x = np.array(x).flatten()
         x = x / np.linalg.norm(x) * width / 2.
         p.addUserDebugLine(position, position + z, [0, 0, 1])
-        p.addUserDebugLine(position, position + x, [1, 0, 0])
-        p.addUserDebugLine(position, position - x, [1, 0, 0])
+        p.addUserDebugLine(position - x, position + x, [1, 0, 0])
 

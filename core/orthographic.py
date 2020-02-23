@@ -442,12 +442,13 @@ class OrthoNet:
                   side_cloud.to_depth(index=sidx),
                   top_cloud.to_depth(index=tidx)]
 
-        positions, zs, ys, widths, scores = [], [], [], [], []
+        positions, zs, ys, widths, scores, metadata = [], [], [], [], [], []
 
         if predict_best_only:
             s = [d.entropy_score() for d in depths]
             best_idx = np.argmax(s)
             depths = [depths[best_idx]]
+            metadata = [{'view': ['front', 'side', 'top'][best_idx]}]
 
         for index, depth in enumerate(depths):
             # Do multiple attempts only for front and side views
@@ -491,7 +492,7 @@ class OrthoNet:
             widths.append(width)
             scores.append(depth.entropy_score())
 
-        return positions, zs, ys, widths, scores
+        return positions, zs, ys, widths, scores, metadata
 
     def network_predictor(self, depth_img, index, debug=True, n_attempts=1):
         from core.network import get_grasps_from_output

@@ -209,9 +209,9 @@ class TestOrthographic(TestCase):
         core.orthographic.render_frame([0, 0, 0], eye[0], eye[1], eye[2], cloud=cloud)
 
     def test_collision_avoidance(self):
-        cloud = np.load('points.npy')
+        cloud = np.load('horizontal_bottle.npy')
         net = core.orthographic.OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
-        net.predict(cloud, net.network_predictor, predict_best_only=True, n_attempts=3, debug=True, roi=[-2, 1, -.15, .25, 0, 0.2])
+        net.predict(cloud, net.network_predictor, predict_best_only=True, n_attempts=3, debug=True, roi=[-1, 1, -1, 1, -.1, 1])
 
     def test_bottom_bound(self):
         mass = np.pad(np.eye(10), 1, 'constant', constant_values=[0]).flatten()

@@ -6,6 +6,8 @@ import core.network as network
 from core.network import Network
 from skimage import io
 from skimage.transform import resize
+from skimage.filters import gaussian
+from scipy.ndimage import grey_closing
 
 dt = datetime.datetime.now().strftime('%y%m%d_%H%M')
 
@@ -26,16 +28,18 @@ MODEL_FNS = ['/home/s3485781/DATA/networks/ggcnn_rss/epoch_29_model.hdf5',
 image_fns = glob.glob(os.path.join(DS_PATH, '*/*/*.jpg'))
 image_ids = ['/'.join(fn.split('/')[-3:]) for fn in image_fns]
 
-# images = np.zeros((len(image_fns), 300, 300))
-images = np.zeros((10, 300, 300))
+images = np.zeros((len(image_fns), 300, 300))
+# images = np.zeros((20, 300, 300))
 
 for idx, image_fn in enumerate(image_fns):
     # Upscale images to 300x300
     images[idx] = resize(io.imread(image_fn, as_gray=True), (300, 300), anti_aliasing=True, mode='constant')
+    images[idx] = gaussian(grey_closing(images[idx], (7, 7)), 1, preserve_range=True)
+
     # Reverse values to denote distance from camera
     images[idx] = np.max(images[idx]) - images[idx]
-    if idx == 9:
-        break
+    # if idx == 19:
+    #     break
 
 for model_fn in MODEL_FNS:
     model_name = model_fn.split('/')[-2]

@@ -8,3 +8,4 @@ export SIM_LOG_PATH=$THESIS_DATA_PATH/results/sim_logs
 export RESULTS_PATH=$THESIS_DATA_PATH/results
 export MODELS_PATH=$THESIS_DATA_PATH/3d_models/shapenetsem40
 export VHACD_PATH=''
+export GRIPPER_PATH=$THESIS_PATH/simulator/gripper.urdf
