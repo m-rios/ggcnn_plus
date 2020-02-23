@@ -55,11 +55,11 @@ if __name__ == '__main__':
                         type=str,
                         help='path to hdf5 file containing the network model')
     parser.add_argument('--scenes',
-                        default='../data/scenes/200210_1654_manually_generated_scenes.hdf5',
+                        default='../data/scenes/shapenetsem40_5.hdf5',
                         type=str,
                         help='path to hdf5 file containing the simulation scenes')
     parser.add_argument('--angle',
-                        default=90,
+                        default=75,
                         type=float,
                         help='angle in degrees in the y axes at which the camera will be placed')
     parser.add_argument('--distance',
@@ -75,6 +75,11 @@ if __name__ == '__main__':
                         default=300,
                         type=int,
                         help='Resolution of the simulation camera. Relevant for the point cloud resolution')
+    parser.add_argument('--scoring',
+                        default='entropy',
+                        type=str,
+                        choices=['entropy', 'observed_mass'],
+                        help='Function used to select the best view')
 
     args = parser.parse_args()
 
@@ -89,6 +94,10 @@ if __name__ == '__main__':
     scenes_ds = h5py.File(args.scenes, 'r')
     scenes = scenes_ds['scene']  # TODO: remove selection
 
+    # Uncomment to debug a particular scene
+    # name_filter = scenes_ds['name'][:] == '0_3b1f7f066991f2d45969e7cd6a0b6a55'
+    # scenes = scenes[name_filter]
+
     sim = Simulator(use_egl=False, gui=False)  # Change to no gui
     sim.cam.pos = [0., np.cos(np.deg2rad(args.angle)) * args.distance, np.sin(np.deg2rad(args.angle)) * args.distance]
     sim.cam.width = args.cam_resolution
@@ -97,44 +106,53 @@ if __name__ == '__main__':
 
     onet = OrthoNet(model_fn=args.network)
 
+    _global_start = time.time()
     for scene_idx in range(len(scenes)):
-        scene_name = scenes_ds['name'][scene_idx]
-        logging.debug('Testing scene %s' % scene_name)
-        sim.restore(scenes[scene_idx], os.environ['MODELS_PATH'])
-        # Get the gripper out of the way so it doesn't interfere with cloud
-        sim.teleport_to_pose([0., 0., 10.], [0., 0., 0.], 0.)
+        try:  # TODO: remove after fixing all bugs
+            scene_name = scenes_ds['name'][scene_idx]
+            logging.debug('Testing scene %s' % scene_name)
+            sim.restore(scenes[scene_idx], os.environ['MODELS_PATH'])
+            # Get the gripper out of the way so it doesn't interfere with cloud
+            sim.teleport_to_pose([0., 0., 10.], [0., 0., 0.], 0.)
 
-        logging.debug('Generating point cloud')
-        _start = time.time()
-        cloud = transform_world_to_camera(sim.cam.point_cloud(), sim.cam)
-        _end = time.time()
-        logging.debug('Done in %ss' % (_end - _start))
+            logging.debug('Generating point cloud')
+            _start = time.time()
+            cloud = transform_world_to_camera(sim.cam.point_cloud(), sim.cam)
+            _end = time.time()
+            logging.debug('Done in %ss' % (_end - _start))
 
-        logging.debug('Predicting')
-        _start = time.time()
-        ps, zs, xs, ws, scores, metadata = onet.predict(cloud,
-                                                        onet.network_predictor,
-                                                        predict_best_only=True,
-                                                        n_attempts=5,
-                                                        debug=False)
-        _end = time.time()
-        logging.debug('Done in %ss' % (_end - _start))
-        best_idx = np.argmax(scores)
+            logging.debug('Predicting')
+            _start = time.time()
+            ps, zs, xs, ws, scores, metadata = onet.predict(cloud,
+                                                            onet.network_predictor,
+                                                            predict_best_only=True,
+                                                            n_attempts=5,
+                                                            debug=False,
+                                                            roi=[-2, 2, -2, 2, -0.01, 2])  # roi prevents opengl artifacts
+            _end = time.time()
+            logging.debug('Done in %ss' % (_end - _start))
+            best_idx = np.argmax(scores)
 
-        p = transform_camera_to_world(ps[best_idx], sim.cam)
-        R = get_camera_frame(sim.cam)
-        z = R.dot(zs[best_idx].T).T
-        x = R.dot(xs[best_idx].T).T
-        w = ws[best_idx]
+            p = transform_camera_to_world(ps[best_idx], sim.cam)
+            R = get_camera_frame(sim.cam)
+            z = R.dot(zs[best_idx].T).T
+            x = R.dot(xs[best_idx].T).T
+            w = ws[best_idx]
 
-        sim.add_debug_pose(p, z, x, w)
-        sim.teleport_to_pre_grasp(p, z, x, w)
-        sim.grasp_along(z)
-        sim.move_to_post_grasp()
-        result = sim.move_to_drop_off()
-        logging.debug('Evaluation %s' % (['failed', 'succeeded'][result]))
-        # sim.run(1000)
-        results_f.write(','.join([scene_name, str(p), str(z), str(x), str(w), metadata[best_idx]['view'], str(result)]) + '\n')
-        results_f.flush()
+            logging.debug('Evaluating')
+            _start = time.time()
+            sim.add_debug_pose(p, z, x, w)
+            sim.teleport_to_pre_grasp(p, z, x, w)
+            sim.grasp_along(z)
+            sim.move_to_post_grasp()
+            result = sim.move_to_drop_off()
+            _end = time.time()
+            logging.debug('Evaluation %s and took %ss' % (['failed', 'succeeded'][result], _end - _start))
+            results_f.write(','.join([scene_name, str(p), str(z), str(x), str(w), metadata[best_idx]['view'], str(result)]) + '\n')
+            results_f.flush()
+        except Exception as e:
+            logging.error(e)
 
+    _global_end = time.time()
+    results_f.write('Finished full evaluation in %s\n' % (_global_end - _global_start))
     results_f.close()

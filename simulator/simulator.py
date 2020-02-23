@@ -284,6 +284,8 @@ class Simulator:
         self.logger = None
 
         self.pre_grasp_distance = pre_grasp_distance
+        self.debug_z_id = None
+        self.debug_x_id = None
 
     def __del__(self):
         p.disconnect()
@@ -672,16 +674,23 @@ class Simulator:
         # Close gripper
         self.close_gripper()
 
+    def lift(self, distance, linvel=0.5, force=1000):
+        z = p.getLinkState(self.gid, 5)[0][2]
+        timeout = distance / linvel
+        p.setJointMotorControl2(self.gid, 2, p.POSITION_CONTROL,
+                                targetPosition=z + distance, targetVelocity=0,
+                                force=force, maxVelocity=linvel, positionGain=0.3, velocityGain=1)
+        for _ in range(int(timeout / self.timestep)):
+            self.step()
+
     def move_to_post_grasp(self):
-        target_pos = map(lambda joint: joint[0], p.getJointStates(self.gid, range(6)))
-        target_pos[2] += self.pre_grasp_distance
-        self.move_gripper_to(target_pos)
+        self.lift(self.pre_grasp_distance)
 
     def move_to_drop_off(self):
         if not self.bin:
             self.bin = p.loadURDF(MODULE_PATH + '/bin.urdf', basePosition=self.bin_pos)
 
-        dropoff = self.bin_pos + map(lambda joint: joint[0], p.getJointStates(self.gid, range(3, 6)))
+        dropoff = self.bin_pos + [0., 0., 0.]
         dropoff[2] += 0.75
 
         # Take offset between object's COM and gripper to compute postgrasp
@@ -909,6 +918,11 @@ class Simulator:
         z = z / np.linalg.norm(z)
         x = np.array(x).flatten()
         x = x / np.linalg.norm(x) * width / 2.
-        p.addUserDebugLine(position, position + z, [0, 0, 1])
-        p.addUserDebugLine(position - x, position + x, [1, 0, 0])
-
+        if self.debug_z_id is None:
+            self.debug_z_id = p.addUserDebugLine(position, position + z, [0, 0, 0])
+        else:
+            p.addUserDebugLine(position, position + z, [0, 0, 0], replaceItemUniqueId=self.debug_z_id)
+        if self.debug_x_id is None:
+            self.debug_x_id = p.addUserDebugLine(position - x, position + x, [1, 0, 0])
+        else:
+            p.addUserDebugLine(position - x, position + x, [1, 0, 0], replaceItemUniqueId=self.debug_x_id)

@@ -415,15 +415,17 @@ class OrthoNet:
             table_cloud[:, [0, 2]] *= -1
             camera_position_plane[:, [0, 2]] *= -1
             camera_frame_plane[:, [0, 2]] *= -1
-        if debug:
-            render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2],
-                         cloud=table_cloud)
+        # if debug:
+        #     render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2],
+        #                  cloud=table_cloud)
         roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
         object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
         object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
         camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
         camera_frame_object = tf_roi_to_object.transform(camera_frame_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
 
+        # if debug:
+        #     render(object_cloud)
 
         # eye = np.eye(3)
         # render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
@@ -509,10 +511,9 @@ class OrthoNet:
         for g_idx in range(len(gs)):
             grasp = gs[g_idx]
             point = depth_img.to_object(grasp.center)
-
             delta = np.array([-np.sin(grasp.angle), np.cos(grasp.angle)]) * grasp.width
-            start = np.subtract(grasp.center, delta).astype(np.int)
-            end = np.add(grasp.center, delta).astype(np.int)
+            start = np.clip(np.subtract(grasp.center, delta).astype(np.int), 0, positions.shape[1] - 1)
+            end = np.clip(np.add(grasp.center, delta).astype(np.int), 0, positions.shape[1] - 1)
             img_axes = np.delete(range(3), index)
             object_start = depth_img.to_object(start)[img_axes]
             object_end = depth_img.to_object(end)[img_axes]
