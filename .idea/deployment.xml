@@ -13,9 +13,12 @@
             <excludedPath path="/home/s3485781/msc-thesis/.gpu" />
             <excludedPath local="true" path="$PROJECT_DIR$/data" />
             <excludedPath path="msc-thesis/.gpu" />
-            <excludedPath local="true" path="$PROJECT_DIR$/test/depth_inpainted.npy" />
             <excludedPath local="true" path="$PROJECT_DIR$/simulator/data" />
             <excludedPath local="true" path="$PROJECT_DIR$/dissertation" />
+            <excludedPath local="true" path="$PROJECT_DIR$/test" />
+            <excludedPath local="true" path="$PROJECT_DIR$/ggcnn" />
+            <excludedPath local="true" path="$PROJECT_DIR$/out" />
+            <excludedPath local="true" path="$PROJECT_DIR$/jobs/out_backup" />
           </excludedPaths>
         </serverdata>
       </paths>

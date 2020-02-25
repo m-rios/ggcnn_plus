@@ -419,24 +419,27 @@ class OrthoNet:
         #     render_frame(camera_position_plane, camera_frame_plane[0], camera_frame_plane[1], camera_frame_plane[2],
         #                  cloud=table_cloud)
         roi_cloud = table_cloud.filter_roi(roi)  # table_cloud points within the ROI
-        object_cloud = roi_cloud.remove_plane()  # roi_cloud without the plane
+        object_cloud = roi_cloud.remove_plane(th=0.001)  # roi_cloud without the plane
         object_cloud, tf_roi_to_object = object_cloud.pca(axes=[0, 1])  # object_cloud with same z as table but x,y oriented by the object
         camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
         camera_frame_object = tf_roi_to_object.transform(camera_frame_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
 
-        # if debug:
-        #     render(object_cloud)
-
-        # eye = np.eye(3)
-        # render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
-        #              cloud=object_cloud)
-        # render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
+        if debug:
+            # render(object_cloud)
+            # eye = np.eye(3)
+            # render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
+            render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
+                         cloud=object_cloud)
 
         (front_cloud, fidx, f_rotated), \
             (side_cloud, sidx, s_rotated), \
             (top_cloud, tidx, t_rotated) = orient_object_cloud(object_cloud,
                                                                camera_position_object,
                                                                camera_frame_object)
+
+        if debug:
+            render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
+                         cloud=top_cloud)
 
         was_rotated = [f_rotated, s_rotated, t_rotated]
 
@@ -450,6 +453,7 @@ class OrthoNet:
             s = [d.entropy_score() for d in depths]
             best_idx = np.argmax(s)
             depths = [depths[best_idx]]
+            was_rotated = [was_rotated[best_idx]]
             metadata = [{'view': ['front', 'side', 'top'][best_idx]}]
 
         for index, depth in enumerate(depths):
@@ -493,6 +497,7 @@ class OrthoNet:
             ys.append(camera_x/np.linalg.norm(camera_x))
             widths.append(width)
             scores.append(depth.entropy_score())
+            # plt.pause(0)
 
         return positions, zs, ys, widths, scores, metadata
 
@@ -506,7 +511,7 @@ class OrthoNet:
             plt.ion()
             plt.show()
             plt.pause(.1)
-        assert len(gs) > 0
+        assert len(gs) > 0, 'No grasp point was found by the network (this typically means bad cloud)'
 
         for g_idx in range(len(gs)):
             grasp = gs[g_idx]

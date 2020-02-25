@@ -80,14 +80,18 @@ if __name__ == '__main__':
                         type=str,
                         choices=['entropy', 'observed_mass'],
                         help='Function used to select the best view')
+    parser.add_argument('--output-file',
+                        default='',
+                        type=str,
+                        help='Name of the output file. A date will be prepended')
 
     args = parser.parse_args()
 
-    FMT = "[%(asctime)s] %(funcName)s():%(lineno)i: %(message)s"
+    FMT = "[%(levelname)s] [%(asctime)s] %(funcName)s():%(lineno)i: %(message)s"
     logging.basicConfig(level=logging.DEBUG, format=FMT)
 
     dt = datetime.datetime.now().strftime('%y%m%d_%H%M%S')
-    results_f = open(os.path.join(args.output_path, 'orthonet_%s.txt' % dt), 'w')
+    results_f = open(os.path.join(args.output_path, 'orthonet_%s_%s.txt' % (dt, args.output_file)), 'w')
     results_f.writelines(['%s: %s\n' % (arg, getattr(args, arg)) for arg in vars(args)])
     results_f.write('scene_name,p,z,x,w,view,success\n')
 
@@ -95,7 +99,7 @@ if __name__ == '__main__':
     scenes = scenes_ds['scene']  # TODO: remove selection
 
     # Uncomment to debug a particular scene
-    # name_filter = scenes_ds['name'][:] == '0_3b1f7f066991f2d45969e7cd6a0b6a55'
+    # name_filter = scenes_ds['name'][:] == '2_3b1f7f066991f2d45969e7cd6a0b6a55'
     # scenes = scenes[name_filter]
 
     sim = Simulator(use_egl=False, gui=False)  # Change to no gui
@@ -150,8 +154,9 @@ if __name__ == '__main__':
             logging.debug('Evaluation %s and took %ss' % (['failed', 'succeeded'][result], _end - _start))
             results_f.write(','.join([scene_name, str(p), str(z), str(x), str(w), metadata[best_idx]['view'], str(result)]) + '\n')
             results_f.flush()
-        except Exception as e:
-            logging.error(e)
+        except Exception, e:
+            results_f.write('%s failed due to exception: %s\n' % (scene_name, str(e)))
+            logging.error(str(e))
 
     _global_end = time.time()
     results_f.write('Finished full evaluation in %s\n' % (_global_end - _global_start))
