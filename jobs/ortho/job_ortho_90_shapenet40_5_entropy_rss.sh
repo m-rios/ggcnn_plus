@@ -17,4 +17,5 @@ python core/evaluate_orthographic_pipeline.py \
           --angle 90 \
           --cam-resolution 500 \
           --scoring entropy \
-          --output-file $SLURM_JOB_ID
+          --output-file $SLURM_JOB_ID \
+          --save-grasps

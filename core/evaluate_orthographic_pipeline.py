@@ -84,6 +84,13 @@ if __name__ == '__main__':
                         default='',
                         type=str,
                         help='Name of the output file. A date will be prepended')
+    parser.add_argument('--save-grasps',
+                        action='store_true',
+                        help='If set it will save the output of the network to an image')
+    parser.add_argument('--padding',
+                        default=80,
+                        type=int,
+                        help='Padding on the orthographic image sent to the network')
 
     args = parser.parse_args()
 
@@ -91,9 +98,15 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format=FMT)
 
     dt = datetime.datetime.now().strftime('%y%m%d_%H%M%S')
-    results_f = open(os.path.join(args.output_path, 'orthonet_%s_%s.txt' % (dt, args.output_file)), 'w')
+    results_fn = os.path.join(args.output_path, 'orthonet_%s_%s.txt' % (dt, args.output_file))
+    results_f = open(results_fn, 'w')
     results_f.writelines(['%s: %s\n' % (arg, getattr(args, arg)) for arg in vars(args)])
     results_f.write('scene_name,p,z,x,w,view,success\n')
+
+    if args.save_grasps:
+        grasps_path = results_fn.split('.txt')[0]
+        if not os.path.exists(grasps_path):
+            os.makedirs(grasps_path)
 
     scenes_ds = h5py.File(args.scenes, 'r')
     scenes = scenes_ds['scene']  # TODO: remove selection
@@ -101,6 +114,9 @@ if __name__ == '__main__':
     # Uncomment to debug a particular scene
     # name_filter = scenes_ds['name'][:] == '2_3b1f7f066991f2d45969e7cd6a0b6a55'
     # scenes = scenes[name_filter]
+
+    # Uncomment to debug a range of scenes
+    # scenes = scenes[:3]
 
     sim = Simulator(use_egl=False, gui=False)  # Change to no gui
     sim.cam.pos = [0., np.cos(np.deg2rad(args.angle)) * args.distance, np.sin(np.deg2rad(args.angle)) * args.distance]
@@ -131,8 +147,13 @@ if __name__ == '__main__':
                                                             onet.network_predictor,
                                                             predict_best_only=True,
                                                             n_attempts=5,
-                                                            debug=False,
+                                                            debug=True,
+                                                            padding=args.padding,
                                                             roi=[-2, 2, -2, 2, -0.01, 2])  # roi prevents opengl artifacts
+            if args.save_grasps:
+                grasp_fn = os.path.join(grasps_path, 'grasp_%s_%s.png' % (dt, scene_name))
+                metadata[0]['grasp_fig'].savefig(grasp_fn, bbox_inches='tight', dpi=60)
+
             _end = time.time()
             logging.debug('Done in %ss' % (_end - _start))
             best_idx = np.argmax(scores)

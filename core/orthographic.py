@@ -7,6 +7,7 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import RANSACRegressor
 from skimage.filters import gaussian
 from scipy.spatial.transform import Rotation as R
+from core.network import plot_grasps
 import pylab as plt
 
 class Transform:
@@ -388,7 +389,7 @@ class OrthoNet:
             from core.network import Network
             self.network = Network(model_fn=model_fn)
 
-    def predict(self, cloud, predictor, roi=None, debug=True, predict_best_only=False, n_attempts=1):
+    def predict(self, cloud, predictor, roi=None, debug=True, predict_best_only=False, n_attempts=1, padding=7):
         """
         Yields a point and orientation for a grasp in the point cloud
         :param cloud: Point cloud (ndarray of shape N, 3)
@@ -424,12 +425,12 @@ class OrthoNet:
         camera_position_object = tf_roi_to_object.transform(camera_position_plane, axes=[0, 1])  # Camera position w.r.t FoR of the object
         camera_frame_object = tf_roi_to_object.transform(camera_frame_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
 
-        if debug:
+        # if debug:
             # render(object_cloud)
             # eye = np.eye(3)
             # render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
-            render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
-                         cloud=object_cloud)
+            # render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
+            #              cloud=object_cloud)
 
         (front_cloud, fidx, f_rotated), \
             (side_cloud, sidx, s_rotated), \
@@ -437,15 +438,15 @@ class OrthoNet:
                                                                camera_position_object,
                                                                camera_frame_object)
 
-        if debug:
-            render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
-                         cloud=top_cloud)
+        # if debug:
+        #     render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
+        #                  cloud=top_cloud)
 
         was_rotated = [f_rotated, s_rotated, t_rotated]
 
-        depths = [front_cloud.to_depth(index=fidx),
-                  side_cloud.to_depth(index=sidx),
-                  top_cloud.to_depth(index=tidx)]
+        depths = [front_cloud.to_depth(index=fidx, padding=padding),
+                  side_cloud.to_depth(index=sidx, padding=padding),
+                  top_cloud.to_depth(index=tidx, padding=padding)]
 
         positions, zs, ys, widths, scores, metadata = [], [], [], [], [], []
 
@@ -460,7 +461,8 @@ class OrthoNet:
             # Do multiple attempts only for front and side views
             attempts = (index in [0, 1] and n_attempts) or 1
             print 'attempts', attempts
-            position, z, y, width = predictor(depth, depth.index, debug=debug, n_attempts=attempts)
+            position, z, y, width, fig = predictor(depth, depth.index, debug=debug, n_attempts=attempts)
+            metadata[index]['grasp_fig'] = fig
             print('Entropy: {}'.format(depth.entropy_score()))
             if was_rotated[index]:
                 # Since z will never be rotated, we will always be rotating point and z around object z
@@ -469,7 +471,7 @@ class OrthoNet:
                 # Mirror the angle. Z is common for front and left, so we can always invert that one
                 y[2] *= -1
             if debug:
-                render_pose(object_cloud, position, z, y, width)
+                render_pose(object_cloud, position, z, y, width, wait=True)
 
             # Backwards transform
             roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
@@ -489,15 +491,14 @@ class OrthoNet:
             camera_x -= roi_com
             # camera_orientation = camera_orientation / np.linalg.norm(camera_orientation)
             # camera_x = camera_x / np.linalg.norm(camera_x)
-            if debug:
-                render_pose(camera_cloud, camera_position, camera_orientation, camera_x, width)
+            # if debug:
+            #     render_pose(camera_cloud, camera_position, camera_orientation, camera_x, width)
 
             positions.append(camera_position)
             zs.append(camera_orientation/np.linalg.norm(camera_orientation))
             ys.append(camera_x/np.linalg.norm(camera_x))
             widths.append(width)
             scores.append(depth.entropy_score())
-            # plt.pause(0)
 
         return positions, zs, ys, widths, scores, metadata
 
@@ -505,12 +506,11 @@ class OrthoNet:
         from core.network import get_grasps_from_output
         positions, angles, widths = self.network.predict(depth_img.img)
         gs = get_grasps_from_output(positions, angles, widths, n_grasps=n_attempts)
+        fig = plot_grasps(depth_img.img, gs)
         if debug:
-            from core.network import get_output_plot
-            get_output_plot(depth_img.img, positions, angles, widths, no_grasps=n_attempts)
             plt.ion()
             plt.show()
-            plt.pause(.1)
+            plt.pause(.0001)
         assert len(gs) > 0, 'No grasp point was found by the network (this typically means bad cloud)'
 
         for g_idx in range(len(gs)):
@@ -531,11 +531,11 @@ class OrthoNet:
             z = np.insert(np.zeros(2), index, -1)
 
             # Exit if the current solution has enough clearance from the ground
-            if n_attempts > 1 and np.insert(object_end, index, 0)[2] > 0:
+            if n_attempts > 1 and np.insert(object_end, index, point[index])[2] > 0:
                 print 'Found collision free grasp at attempt', g_idx + 1, 'out of', n_attempts
                 break
 
-        return point, z, y, width
+        return point, z, y, width, fig
 
     @staticmethod
     def manual_predictor(depth_img, index, debug=None, n_attempts=1):
@@ -600,7 +600,7 @@ class OrthoNet:
         y = np.insert([end[0] - start[0], end[1] - start[1]], index, 0)
         y = y / np.linalg.norm(y)
 
-        return point, z, y, width
+        return point, z, y, width, None
 
 
 def render_pose(cloud, position, z_input, y_input, width, wait=False):

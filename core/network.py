@@ -72,6 +72,24 @@ def get_output_plot(depth, position, angle, width, no_grasps=1, ground_truth=Non
     return fig
 
 
+def plot_grasps(depth, gs):
+
+    fig = plt.figure(frameon=False)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    fig.add_axes(ax)
+    ax.set_axis_off()
+    ax.imshow(depth, aspect='equal')
+    ax.set_xlim([0, 299])
+    ax.set_ylim([0, 299])
+    colors = ['r', 'w', 'k', 'm', 'g']
+    for g_idx, g in enumerate(gs):
+        g.plot(ax, colors[g_idx])
+        ax.text(g.center[1], g.center[0], str(g_idx), color=colors[g_idx])
+
+    plt.margins(0)
+
+    return fig
+
 def plot_output(depth, positions, angles, widths, no_grasps=1, ground_truth=None):
     fig = get_output_plot(depth, positions, angles, widths, no_grasps, ground_truth)
     plt.show(fig)

@@ -88,9 +88,10 @@ def _parse_orthonet_results(fn):
     line = f.readline()
 
     results = []
-    errors = 0
+    errors = []
     while line:
         if line.find('failed due to exception') > 0:
+            errors.append(line)
             line = f.readline()
             continue
 
@@ -409,6 +410,12 @@ class FinalPlots(TestCase):
             '/Users/mario/Developer/msc-thesis/data/results/orthonet_200224_184456_9731208.txt',
             '/Users/mario/Developer/msc-thesis/data/results/orthonet_200224_184552_9731205.txt',
             '/Users/mario/Developer/msc-thesis/data/results/orthonet_200224_191010_9731395.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_140944_9745476.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_140944_9745478.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753960.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753959.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753949.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753947.txt',
         ]
         row = []
         for res_fn in res_fns:
@@ -434,9 +441,9 @@ class FinalPlots(TestCase):
             side_accuracy = np.sum(np.array(map(lambda x: x[6], side))) / float(len(side))
             n_side = len(side) / float(len(res))
 
-            row.append([description, accuracy, n_top, top_accuracy, n_front, front_accuracy, n_side, side_accuracy])
+            row.append([description, accuracy, n_top, top_accuracy, n_front, front_accuracy, n_side, side_accuracy, len(errors)])
 
-        print tabulate(row, headers=['Model & Setup', 'Accuracy', '% Top', 'Top Accuracy', '%Front', 'Front Accuracy', '% Side', 'Side Accuracy'])
+        print tabulate(row, headers=['Model & Setup', 'Accuracy', '% Top', 'Top Accuracy', '%Front', 'Front Accuracy', '% Side', 'Side Accuracy', 'Errors'])
 
 # if __name__ == '__main__':
 #     # simulator_baseline()
