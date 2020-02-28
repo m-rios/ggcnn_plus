@@ -470,8 +470,8 @@ class OrthoNet:
                 z[:2] *= -1
                 # Mirror the angle. Z is common for front and left, so we can always invert that one
                 y[2] *= -1
-            if debug:
-                render_pose(object_cloud, position, z, y, width, wait=True)
+            # if debug:
+            #     render_pose(object_cloud, position, z, y, width, wait=True, close=True)
 
             # Backwards transform
             roi_position = tf_roi_to_object.transform_inverse(position.reshape((1, 3)), axes=[0, 1])
@@ -603,7 +603,7 @@ class OrthoNet:
         return point, z, y, width, None
 
 
-def render_pose(cloud, position, z_input, y_input, width, wait=False):
+def render_pose(cloud, position, z_input, y_input, width, wait=False, close=False):
     cloud = cloud.cloud
     z = z_input * float(width)
     y = y_input * width/2.
@@ -621,6 +621,9 @@ def render_pose(cloud, position, z_input, y_input, width, wait=False):
 
     if wait:
         raw_input('Enter to continue')
+
+    if close:
+        viewer.close()
 
 
 def orient_object_cloud(cloud, camera_position, camera_frame):

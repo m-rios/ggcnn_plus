@@ -91,6 +91,16 @@ if __name__ == '__main__':
                         default=80,
                         type=int,
                         help='Padding on the orthographic image sent to the network')
+    parser.add_argument('--gui',
+                        default=0,
+                        type=int,
+                        choices=[0, 1],
+                        help='If set to 1 pybullet gui will be launched')
+    parser.add_argument('--debug',
+                        default=0,
+                        type=int,
+                        choices=[0, 1],
+                        help='If set to 1 debug visualizations will be used in the orthographic pipeline and simulator')
 
     args = parser.parse_args()
 
@@ -118,7 +128,12 @@ if __name__ == '__main__':
     # Uncomment to debug a range of scenes
     # scenes = scenes[:3]
 
-    sim = Simulator(use_egl=False, gui=False)  # Change to no gui
+    # Hack to fix pybullet-pylab incompatibility on mac os
+    if args.gui:
+        import pylab as plt
+        plt.figure()
+
+    sim = Simulator(use_egl=False, gui=args.gui)  # Change to no gui
     sim.cam.pos = [0., np.cos(np.deg2rad(args.angle)) * args.distance, np.sin(np.deg2rad(args.angle)) * args.distance]
     sim.cam.width = args.cam_resolution
     sim.cam.height = args.cam_resolution
@@ -147,7 +162,7 @@ if __name__ == '__main__':
                                                             onet.network_predictor,
                                                             predict_best_only=True,
                                                             n_attempts=5,
-                                                            debug=True,
+                                                            debug=args.debug,
                                                             padding=args.padding,
                                                             roi=[-2, 2, -2, 2, -0.01, 2])  # roi prevents opengl artifacts
             if args.save_grasps:

@@ -18,4 +18,6 @@ python core/evaluate_orthographic_pipeline.py \
           --cam-resolution 500 \
           --scoring entropy \
           --output-file $SLURM_JOB_ID \
-          --save-grasps
+          --save-grasps \
+          --gui 0 \
+          --debug 0

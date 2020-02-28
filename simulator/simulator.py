@@ -614,6 +614,10 @@ class Simulator:
                     force=force)
         self.run(epochs=int(0.6/self.timestep))
 
+    def stop_gripper(self):
+        for joint in [6,7]:
+            p.setJointMotorControl2(self.gid, joint, p.VELOCITY_CONTROL, targetVelocity=0)
+
     def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.5, angvel=2, force=1000):
         pose[2] += 0.005
         max_dist = 2. # Max distance that the gripper will have to traverse. This determines the timeout
@@ -663,14 +667,14 @@ class Simulator:
             p.setJointMotorControl2(self.gid, joint, p.POSITION_CONTROL,
                                     targetPosition=target_pos[joint], targetVelocity=0,
                                     force=force, maxVelocity=linvel, positionGain=0.3, velocityGain=1)
-
+        print 'Moving to grasp point'
         # Simulation loop
         for _ in range(int(timeout / self.timestep)):
             current_pos = map(lambda joint: joint[0], p.getJointStates(self.gid, range(3)))
             if np.linalg.norm(target_pos - current_pos) < pos_tol:
                 break
             self.step()
-
+        print 'Closing gripper'
         # Close gripper
         self.close_gripper()
 
@@ -720,6 +724,7 @@ class Simulator:
         target_pos = position - z * self.pre_grasp_distance
         target_ori = R.from_dcm(np.column_stack((x, y, z))) * R.from_euler('X', np.pi)
         self.teleport_to_pose(target_pos, target_ori.as_euler('XYZ'), width)
+        self.stop_gripper()
 
     def teleport_to_pose(self, position, orientation, width):
         """

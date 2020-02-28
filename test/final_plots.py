@@ -416,6 +416,7 @@ class FinalPlots(TestCase):
             '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753959.txt',
             '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753949.txt',
             '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753947.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200226_214345_9776695.txt',
         ]
         row = []
         for res_fn in res_fns:

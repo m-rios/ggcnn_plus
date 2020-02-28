@@ -17,4 +17,6 @@ python core/evaluate_orthographic_pipeline.py \
           --angle 60 \
           --cam-resolution 500 \
           --scoring entropy \
-          --output-file $SLURM_JOB_ID
+          --output-file $SLURM_JOB_ID \
+          --gui 0 \
+          --debug 0
