@@ -16,7 +16,9 @@ python core/evaluate_orthographic_pipeline.py \
           --scenes /home/s3485781/DATA/scenes/shapenetsem40_5.hdf5 \
           --angle 30 \
           --cam-resolution 500 \
-          --scoring entropy \
+          --scoring mass \
           --output-file $SLURM_JOB_ID \
+          --save-grasps \
           --gui 0 \
-          --debug 0
+          --debug 0 \
+          --omit-results 0

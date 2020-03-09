@@ -114,6 +114,9 @@ class Depth:
         entropy = np.multiply(entropy, self.mass_probability[self.mass_probability > 0])
         return -np.sum(entropy)
 
+    def mass_score(self):
+        return np.sum(self.mass_probability > 0)
+
     def bottom_bound(self):
         """
         Returns the index of the lowest pixel that was not missing (i.e. that has a mass probability > 0). Useful for
@@ -389,14 +392,21 @@ class OrthoNet:
             from core.network import Network
             self.network = Network(model_fn=model_fn)
 
-    def predict(self, cloud, predictor, roi=None, debug=True, predict_best_only=False, n_attempts=1, padding=7):
+    def predict(self, cloud, predictor, roi=None, debug=True,
+                predict_best_only=False, n_attempts=1, padding=7,
+                score_func='entropy'):
         """
         Yields a point and orientation for a grasp in the point cloud
         :param cloud: Point cloud (ndarray of shape N, 3)
         :param predictor: callback to predict position and angle on a depth image
         :param roi: ROI in the cloud w.r.t work surface
+        :param score_func: statistic used to select view for grasping. Either 'entropy' or 'mass'. 'mass' is sum of
+               observed points (points occluded don't contribute)
         :return: position, orientation
         """
+        assert score_func == 'entropy' or score_func == 'mass'
+        score_func = 'entropy_score' if score_func is 'entropy' else 'mass_score'
+
         roi = roi or [-np.inf, np.inf] * 3
 
         # Forward transform
@@ -426,11 +436,11 @@ class OrthoNet:
         camera_frame_object = tf_roi_to_object.transform(camera_frame_plane, axes=[0, 1]) # Camera orientation w.r.t. FoR of the object
 
         # if debug:
-            # render(object_cloud)
-            # eye = np.eye(3)
-            # render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
-            # render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
-            #              cloud=object_cloud)
+        #     render(object_cloud)
+        #     eye = np.eye(3)
+        #     render_frame([0, 0, 0], eye[0], eye[1], eye[2], wait=False, cloud=object_cloud)
+        #     render_frame(camera_position_object, camera_frame_object[0], camera_frame_object[1], camera_frame_object[2],
+        #                  cloud=object_cloud)
 
         (front_cloud, fidx, f_rotated), \
             (side_cloud, sidx, s_rotated), \
@@ -448,10 +458,17 @@ class OrthoNet:
                   side_cloud.to_depth(index=sidx, padding=padding),
                   top_cloud.to_depth(index=tidx, padding=padding)]
 
-        positions, zs, ys, widths, scores, metadata = [], [], [], [], [], []
+        # if debug:
+        #     plt.ion()
+        #     for d in depths:
+        #         plt.figure()
+        #         plt.imshow(d.img)
+        #     plt.pause(0)
+
+        positions, zs, ys, widths, scores, metadata = [], [], [], [], [], [{}] * 3
 
         if predict_best_only:
-            s = [d.entropy_score() for d in depths]
+            s = [getattr(d, score_func, 'entropy_score') for d in depths]
             best_idx = np.argmax(s)
             depths = [depths[best_idx]]
             was_rotated = [was_rotated[best_idx]]
@@ -463,7 +480,6 @@ class OrthoNet:
             print 'attempts', attempts
             position, z, y, width, fig = predictor(depth, depth.index, debug=debug, n_attempts=attempts)
             metadata[index]['grasp_fig'] = fig
-            print('Entropy: {}'.format(depth.entropy_score()))
             if was_rotated[index]:
                 # Since z will never be rotated, we will always be rotating point and z around object z
                 position[:2] *= -1
@@ -498,7 +514,7 @@ class OrthoNet:
             zs.append(camera_orientation/np.linalg.norm(camera_orientation))
             ys.append(camera_x/np.linalg.norm(camera_x))
             widths.append(width)
-            scores.append(depth.entropy_score())
+            scores.append(getattr(depth, score_func, 'entropy_score'))
 
         return positions, zs, ys, widths, scores, metadata
 

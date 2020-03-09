@@ -615,7 +615,7 @@ class Simulator:
         self.run(epochs=int(0.6/self.timestep))
 
     def stop_gripper(self):
-        for joint in [6,7]:
+        for joint in range(8):
             p.setJointMotorControl2(self.gid, joint, p.VELOCITY_CONTROL, targetVelocity=0)
 
     def move_gripper_to(self, pose, pos_tol=0.01, ang_tol=2, linvel=0.5, angvel=2, force=1000):
@@ -710,7 +710,7 @@ class Simulator:
         self.run(epochs=int(1. / self.timestep))  # Let object fall
 
         final_pos, _ = p.getBasePositionAndOrientation(bid)
-        result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 0.7
+        result = np.linalg.norm(final_pos[0:2] - np.array(self.bin_pos[0:2])) < 1.7
         return result
 
     def teleport_to_pre_grasp(self, position, z, x, width):
@@ -735,19 +735,19 @@ class Simulator:
         :param width: float
         :return:
         """
-        p.resetJointState(self.gid, 0, position[0])
-        p.resetJointState(self.gid, 1, position[1])
-        p.resetJointState(self.gid, 2, position[2])
+        p.resetJointState(self.gid, 0, position[0], targetVelocity=0.)
+        p.resetJointState(self.gid, 1, position[1], targetVelocity=0.)
+        p.resetJointState(self.gid, 2, position[2], targetVelocity=0.)
 
-        p.resetJointState(self.gid, 3, orientation[0])
-        p.resetJointState(self.gid, 4, orientation[1])
-        p.resetJointState(self.gid, 5, orientation[2])
+        p.resetJointState(self.gid, 3, orientation[0], targetVelocity=0.)
+        p.resetJointState(self.gid, 4, orientation[1], targetVelocity=0.)
+        p.resetJointState(self.gid, 5, orientation[2], targetVelocity=0.)
 
         width = 0.3 - width
         width /= 2
 
-        p.resetJointState(self.gid, 6, width)
-        p.resetJointState(self.gid, 7, width)
+        p.resetJointState(self.gid, 6, width, 0.)
+        p.resetJointState(self.gid, 7, width, 0.)
 
     def drawAABB(self, bb, parent=-1, color=black):
         bb = np.array(bb)

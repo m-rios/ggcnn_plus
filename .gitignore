@@ -263,3 +263,4 @@ fabric.properties
 /notebook.py
 /dissertation/
 /extended_abstract/
+*.out

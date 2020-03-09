@@ -115,7 +115,50 @@ def _parse_orthonet_results(fn):
 
     return metadata, results, errors
 
-# This is just so I can easily run an individual method from the IDE
+def _parse_straight_in_results(fn):
+    f = open(fn)
+    metadata = {}
+    # Skip headers
+    line = f.readline()
+    while len(line) < 11 or line[:11] != 'scene_name,':
+        fields = line.split(':')
+        metadata[fields[0]] = None if len(fields) < 2 else ','.join(fields[1:])
+        line = f.readline()
+    line = f.readline()
+
+    results = []
+    errors = []
+    while line:
+        if line.find('failed due to exception') > 0:
+            errors.append(line)
+            line = f.readline()
+            continue
+
+        fields = line.split(',')
+
+        if len(fields) != 6:
+            line = f.readline()
+            continue
+
+        results.append([
+            fields[0],  # scene_name
+            np.array(fields[1]),  # p
+            np.array(fields[2]),  # z
+            np.array(fields[3]),  # x
+            float(fields[4]),  # w
+            fields[5] == 'True\n'  # success
+        ])
+
+        line = f.readline()
+
+    return metadata, results, errors
+
+def _list_failing_scenes_ortho(result_fn):
+    _, res, _ = _parse_orthonet_results(result_fn)
+    failing_names = map(lambda x: x[0], filter(lambda x: not x[6], res))
+    return failing_names
+
+# We use TestCase so it is easy to run an individual method from the IDE
 class FinalPlots(TestCase):
 
     def test_simulator_baseline(self):
@@ -406,17 +449,14 @@ class FinalPlots(TestCase):
 
     def test_orthonet_table(self):
         res_fns = [
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200224_184452_9731206.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200224_184456_9731208.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200224_184552_9731205.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200224_191010_9731395.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_140944_9745476.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_140944_9745478.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753960.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753959.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753949.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200225_203044_9753947.txt',
-            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200226_214345_9776695.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200228_141520_9806501.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200228_172432_9809298.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200228_175445_9809519.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200228_175447_9809520.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200228_175457_9809522.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/orthonet_200228_175500_9809524.txt',
+            # '/Users/mario/Developer/msc-thesis/data/results/orthonet_200301_204309_entropy.txt',
+            # '/Users/mario/Developer/msc-thesis/data/results/orthonet_200301_204314_mass.txt',
         ]
         row = []
         for res_fn in res_fns:
@@ -445,6 +485,93 @@ class FinalPlots(TestCase):
             row.append([description, accuracy, n_top, top_accuracy, n_front, front_accuracy, n_side, side_accuracy, len(errors)])
 
         print tabulate(row, headers=['Model & Setup', 'Accuracy', '% Top', 'Top Accuracy', '%Front', 'Front Accuracy', '% Side', 'Side Accuracy', 'Errors'])
+
+    def test_straight_in_table(self):
+        res_fns = [
+            '/Users/mario/Developer/msc-thesis/data/results/straight_200301_205346_9845226.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/straight_200301_205242_9845176.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/straight_200302_003603_9848182.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/straight_200302_003649_9848180.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/straight_200302_004432_9848258.txt',
+            '/Users/mario/Developer/msc-thesis/data/results/straight_200302_004438_9848259.txt',
+        ]
+
+        row = []
+        for res_fn in res_fns:
+            metadata, res, errors = _parse_straight_in_results(res_fn)
+
+            network_name = 'network' in metadata and metadata['network'].split('/')[-2]
+            angle = 'angle' in metadata and metadata['angle'].replace('\n', '')
+            description = '%s %s' % (network_name, angle)
+
+            success = np.sum(np.array(map(lambda x: x[5], res)))
+            accuracy = success / float(len(res))
+
+            row.append([description, accuracy, len(errors)])
+
+        print tabulate(row, headers=['Model & Setup', 'Accuracy', 'Errors'])
+
+    def test_scoring_comparisson(self):
+        res_fns = []
+
+    def test_show_failing_grasps_ortho(self):
+        import glob
+        import pylab as plt
+        result_fn = '/Users/mario/Developer/msc-thesis/data/results/orthonet_200228_125605_9805422.txt'
+        global names
+        names = _list_failing_scenes_ortho(result_fn)
+        result_path = result_fn.split('.')[0]
+        imgs = []
+        global idx
+        idx = 0
+        for name in names:
+            fn = glob.glob(result_path + '/*%s.png' % (name))[0]
+            imgs.append(plt.imread(fn))
+
+        global fig
+        fig = plt.figure()
+
+        def on_keypress(event):
+            global idx, names, fig
+            if event.key == 'right' or event.key == 'down':
+                idx = np.clip(idx + 1, 0, len(imgs))
+            if event.key == 'left' or event.key == 'up':
+                idx = np.clip(idx - 1, 0, len(imgs))
+
+            plt.suptitle(names[idx])
+            plt.imshow(imgs[idx])
+            fig.canvas.draw()
+            print 'Plotting %s' % names[idx]
+
+        fig.canvas.mpl_connect('key_press_event', on_keypress)
+        plt.suptitle(names[0])
+        plt.imshow(imgs[0])
+        plt.show()
+
+    def test_ortho_pipeline(self):
+        import pybullet as p
+        from simulator.simulator import Simulator
+        from core.orthographic import PointCloud, OrthoNet
+        from core.evaluate_orthographic_pipeline import transform_world_to_camera
+        import h5py
+        plt.figure()
+        sim = Simulator(use_egl=False, gui=True)
+        sim.cam.pos = [1., 1., 1.]
+        sim.cam.width = 500
+        sim.cam.height = 500
+
+        scene = h5py.File('../data/scenes/200210_1654_manually_generated_scenes.hdf5')['scene'][0]
+        sim.restore(scene, '../data/3d_models/shapenetsem40')
+
+        cloud = transform_world_to_camera(sim.cam.point_cloud(), sim.cam)
+        net = OrthoNet(model_fn='/Users/mario/Developer/msc-thesis/data/networks/ggcnn_rss/epoch_29_model.hdf5')
+        net.predict(cloud, predictor=net.network_predictor, debug=True, roi=[-1, 1, -1, 1, -1, 1], padding=80)
+        plt.pause(0)
+
+        # cloud = cloud.remove_plane()
+        # cloud.render()
+
+        # sim.run(1000)
 
 # if __name__ == '__main__':
 #     # simulator_baseline()

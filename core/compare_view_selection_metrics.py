@@ -59,7 +59,7 @@ if __name__ == '__main__':
                         type=str,
                         help='path to hdf5 file containing the simulation scenes')
     parser.add_argument('--angle',
-                        default=75,
+                        default=45,
                         type=float,
                         help='angle in degrees in the y axes at which the camera will be placed')
     parser.add_argument('--distance',
@@ -75,18 +75,10 @@ if __name__ == '__main__':
                         default=300,
                         type=int,
                         help='Resolution of the simulation camera. Relevant for the point cloud resolution')
-    parser.add_argument('--scoring',
-                        default='mass',
-                        type=str,
-                        choices=['entropy', 'mass'],
-                        help='Function used to select the best view')
     parser.add_argument('--output-file',
                         default='',
                         type=str,
                         help='Name of the output file. A date will be prepended')
-    parser.add_argument('--save-grasps',
-                        action='store_true',
-                        help='If set it will save the output of the network to an image')
     parser.add_argument('--padding',
                         default=80,
                         type=int,
@@ -113,16 +105,11 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format=FMT)
 
     dt = datetime.datetime.now().strftime('%y%m%d_%H%M%S')
-    results_fn = os.path.join(args.output_path, 'orthonet_%s_%s.txt' % (dt, args.output_file))
+    results_fn = os.path.join(args.output_path, 'metric_baseline_%s_%s.txt' % (dt, args.output_file))
     if not args.omit_results:
         results_f = open(results_fn, 'w')
         results_f.writelines(['%s: %s\n' % (arg, getattr(args, arg)) for arg in vars(args)])
         results_f.write('scene_name,p,z,x,w,view,success\n')
-
-    if args.save_grasps:
-        grasps_path = results_fn.split('.txt')[0]
-        if not os.path.exists(grasps_path):
-            os.makedirs(grasps_path)
 
     scenes_ds = h5py.File(args.scenes, 'r')
     scenes = scenes_ds['scene']
@@ -154,6 +141,8 @@ if __name__ == '__main__':
 
     onet = OrthoNet(model_fn=args.network)
 
+    accuracy = 0
+
     _global_start = time.time()
     for scene_idx in range(len(scenes)):
         try:  # TODO: remove after fixing all bugs
@@ -173,44 +162,50 @@ if __name__ == '__main__':
             _start = time.time()
             ps, zs, xs, ws, scores, metadata = onet.predict(cloud,
                                                             onet.network_predictor,
-                                                            predict_best_only=True,
+                                                            predict_best_only=False,
                                                             n_attempts=5,
                                                             debug=args.debug,
                                                             padding=args.padding,
                                                             roi=[-2, 2, -2, 2, -0.01, 2],  # roi prevents opengl artifacts
-                                                            score_func=args.scoring)
-            if args.save_grasps:
-                grasp_fn = os.path.join(grasps_path, 'grasp_%s_%s.png' % (dt, scene_name))
-                metadata[0]['grasp_fig'].savefig(grasp_fn, bbox_inches='tight', dpi=60)
+                                                            )
 
             _end = time.time()
             logging.debug('Done in %ss' % (_end - _start))
-            best_idx = np.argmax(scores)
-
-            p = transform_camera_to_world(ps[best_idx], sim.cam)
-            R = get_camera_frame(sim.cam)
-            z = R.dot(zs[best_idx].T).T
-            x = R.dot(xs[best_idx].T).T
-            w = ws[best_idx]
 
             logging.debug('Evaluating')
             _start = time.time()
-            sim.add_debug_pose(p, z, x, w)
-            sim.teleport_to_pre_grasp(p, z, x, w)
-            sim.grasp_along(z)
-            sim.move_to_post_grasp()
-            result = sim.move_to_drop_off()
+
+            result = False
+            for view_idx in range(len(ps)):
+
+                p = transform_camera_to_world(ps[view_idx], sim.cam)
+                R = get_camera_frame(sim.cam)
+                z = R.dot(zs[view_idx].T).T
+                x = R.dot(xs[view_idx].T).T
+                w = ws[view_idx]
+
+                sim.add_debug_pose(p, z, x, w)
+                sim.teleport_to_pre_grasp(p, z, x, w)
+                sim.grasp_along(z)
+                sim.move_to_post_grasp()
+                result = result or sim.move_to_drop_off()
+                if result:
+                    break
+                sim.restore(scenes[scene_idx], os.environ['MODELS_PATH'])
+
             _end = time.time()
             logging.debug('Evaluation %s and took %ss' % (['failed', 'succeeded'][result], _end - _start))
-            if not args.omit_results:
-                results_f.write(','.join([scene_name, str(p), str(z), str(x), str(w), metadata[best_idx]['view'], str(result)]) + '\n')
-                results_f.flush()
-        except NotImplemented, e:
+
+            if result:
+                accuracy += 1
+
+        except Exception, e:
             if not args.omit_results:
                 results_f.write('%s failed due to exception: %s\n' % (scene_name, str(e)))
             logging.error(str(e))
 
     _global_end = time.time()
     if not args.omit_results:
+        results_f.write('Total accuracy: %s' % (float(accuracy)/len(scenes)))
         results_f.write('Finished full evaluation in %s\n' % (_global_end - _global_start))
         results_f.close()

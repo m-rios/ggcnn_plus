@@ -84,7 +84,7 @@ def plot_grasps(depth, gs):
     colors = ['r', 'w', 'k', 'm', 'g']
     for g_idx, g in enumerate(gs):
         g.plot(ax, colors[g_idx])
-        ax.text(g.center[1], g.center[0], str(g_idx), color=colors[g_idx])
+        ax.text(g.center[1], g.center[0], str(g_idx + 1), color=colors[g_idx])
 
     plt.margins(0)
 
