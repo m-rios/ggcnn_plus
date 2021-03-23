@@ -24,6 +24,9 @@ This codebase was developed and tested on python2.7
 ## Paper
 Available at [link](https://www.ai.rug.nl/oel/papers/extending_GG-CNN_OEL.pdf)
 
+![paper](https://github.com/m-rios/msc-thesis/blob/master/paper.png)
+
+Please adequately refer to the papers any time this code is being used. If you do publish a paper where MORE helped your research, we encourage you to cite the following paper in your publications:
 ```
 @article{munozextending,
   title={Extending GG-CNN through Automated Model Space Exploration using Knowledge Transfer},
